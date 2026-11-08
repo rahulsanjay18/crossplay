@@ -37,10 +37,8 @@ OtaUpdater::OtaUpdaterError OtaUpdater::checkForUpdate() {
   // OOM there aborts. fetchUrl handles the verified-https GET, redirects, and
   // User-Agent (see HttpDownloader).
   //
-  // Sources in order: the site, which counts the device and answers with
-  // GitHub's JSON verbatim, then GitHub itself when the site does not answer
-  // or answers nothing with a tag in it (ReleaseSources.h says why). One
-  // parser per attempt: a half-fed parser is not reset by feeding it more.
+  // Sources in order (ReleaseSources.h says which and why). One parser per
+  // attempt: a half-fed parser is not reset by feeding it more.
   //
   // FORK CHANGE: upstream suffixes the asset per board (firmware-x4pro.bin)
   // because one release feeds many devices. This fork's x4pro asks for the
