@@ -222,18 +222,35 @@ void generateLegalMoves(const Position& position, MoveList& list) {
   generatePseudoLegal(position, pseudo);
 
   Position working = position;
+  const bool white = position.whiteToMove;
+  const Square kingStart = findKing(position, white);
+  const bool inCheck = kingStart != kNoSquare && isSquareAttacked(position, kingStart, !white);
+  const int kingFile = kingStart == kNoSquare ? 0 : fileOf(kingStart);
+  const int kingRank = kingStart == kNoSquare ? 0 : rankOf(kingStart);
   for (int i = 0; i < pseudo.count; ++i) {
+    const Move& move = pseudo.moves[i];
+    const bool kingMoves = pieceType(position.squares[move.from]) == King;
+    // Out of check, only a piece on a line with its king can expose it. En
+    // passant is excluded because it also removes the captured pawn.
+    if (kingStart != kNoSquare && !inCheck && !kingMoves && (move.flags & FlagEnPassant) == 0) {
+      const int df = fileOf(move.from) - kingFile;
+      const int dr = rankOf(move.from) - kingRank;
+      if (df != 0 && dr != 0 && df != dr && df != -dr) {
+        list.add(move);
+        continue;
+      }
+    }
+
     Undo undo;
-    const bool white = working.whiteToMove;
-    makeMove(working, pseudo.moves[i], undo);
-    const Square king = findKing(working, white);
+    makeMove(working, move, undo);
+    const Square king = kingMoves ? static_cast<Square>(move.to) : kingStart;
     // Legal exactly when the mover's king is not attacked afterwards. This is
     // what filters out moving into check, moving a pinned piece, and the en
     // passant capture that exposes the king along the fifth rank.
     if (king == kNoSquare || !isSquareAttacked(working, king, !white)) {
-      list.add(pseudo.moves[i]);
+      list.add(move);
     }
-    unmakeMove(working, pseudo.moves[i], undo);
+    unmakeMove(working, move, undo);
   }
 }
 
