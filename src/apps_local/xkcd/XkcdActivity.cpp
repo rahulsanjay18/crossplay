@@ -14,6 +14,7 @@
 #include "../../activities/network/WifiSelectionActivity.h"
 #include "../../network/HttpDownloader.h"
 #include "../Shelf.h"
+#include "../ui/SharedScratch.h"
 #include "../ui/Toybox.h"
 #include "../ui/ToyboxTheme.h"
 #include "DevMode.h"
@@ -36,11 +37,12 @@ constexpr const char* kTmpBmp = "/xkcd/.tmp.bmp";
 // assembled whole: the tallest comic in the archive is 6370 rows, which at
 // 1bpp is 74KB, and taking a heap block that size once per comic is exactly
 // the churn that fragments a device with no room to spare. Sixteen rows of the
-// widest possible comic is 1600 bytes -- too big for the stack under the
-// 256-byte rule, so it lives in the .bss as a single fixed pool.
+// widest possible comic is too big for the stack under the 256-byte rule, so
+// it is a single fixed pool, held while the app is. See SharedScratch.h.
 constexpr int kBandRows = 16;
 constexpr int kMaxStride = (xkcd::kMaxArtWidth + 7) / 8;
-uint8_t gBand[kBandRows * kMaxStride];
+toybox::SharedScratch gBandStore;
+uint8_t* gBand = nullptr;
 
 // The gap flags for one step, sized from the same arithmetic the window is
 // derived from rather than from a number written down beside it. That
@@ -87,10 +89,24 @@ void upper(const char* in, char* out, size_t cap) {
 }  // namespace
 
 std::unique_ptr<Activity> XkcdActivity::create(GfxRenderer& renderer, MappedInputManager& mappedInput) {
-  return makeUniqueNoThrow<XkcdActivity>(renderer, mappedInput);
+  if (!gBandStore.acquire(kBandRows * kMaxStride)) {
+    LOG_ERR("XKCD", "OOM: band buffer");
+    return nullptr;
+  }
+  gBand = static_cast<uint8_t*>(gBandStore.get());
+  auto activity = makeUniqueNoThrow<XkcdActivity>(renderer, mappedInput);
+  if (!activity) {
+    LOG_ERR("XKCD", "OOM: activity");
+    gBandStore.release();
+    gBand = static_cast<uint8_t*>(gBandStore.get());
+  }
+  return activity;
 }
 
-XkcdActivity::~XkcdActivity() = default;
+XkcdActivity::~XkcdActivity() {
+  gBandStore.release();
+  gBand = static_cast<uint8_t*>(gBandStore.get());
+}
 
 // --- Lifecycle -----------------------------------------------------------
 

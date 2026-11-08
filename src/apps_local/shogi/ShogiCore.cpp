@@ -282,6 +282,15 @@ namespace {
 // first level. The only question uchifuzume asks of a reply is "is there one",
 // and the answer cannot hinge on another pawn-drop mate one ply deeper: a
 // side in check from a pawn can always answer it some other way if at all.
+#if defined(ARDUINO_ARCH_ESP32)
+RulesScratch* const kDefaultRulesScratch = nullptr;
+#else
+// Host tests call the rules with no activity around them.
+RulesScratch gHostRulesScratch;
+RulesScratch* const kDefaultRulesScratch = &gHostRulesScratch;
+#endif
+RulesScratch* gRulesScratch = kDefaultRulesScratch;
+
 bool hasLegalMoveAt(const Board& board, int depth);
 
 bool isLegalAt(const Board& board, const Move& move, const int depth) {
@@ -300,12 +309,10 @@ bool isLegalAt(const Board& board, const Move& move, const int depth) {
 }
 
 bool hasLegalMoveAt(const Board& board, const int depth) {
-  // Static so neither level puts a 2.4KB list on the stack. Level 0 serves
+  // Scratch so neither level puts a 2.4KB list on the stack. Level 0 serves
   // hasLegalMove(); level 1 serves the uchifuzume question, which never
-  // recurses further. Main thread only: the rules are never asked anything
-  // from the render task.
-  static MoveList lists[2];
-  MoveList& list = lists[depth > 1 ? 1 : depth];
+  // recurses further.
+  MoveList& list = gRulesScratch->legal[depth > 1 ? 1 : depth];
   generatePseudo(board, list);
   for (int i = 0; i < list.count; ++i) {
     if (isLegalAt(board, list.moves[i], depth)) return true;
@@ -314,6 +321,12 @@ bool hasLegalMoveAt(const Board& board, const int depth) {
 }
 
 }  // namespace
+
+void setRulesScratch(RulesScratch* scratch) { gRulesScratch = scratch; }
+
+void clearRulesScratch(const RulesScratch* scratch) {
+  if (gRulesScratch == scratch) gRulesScratch = kDefaultRulesScratch;
+}
 
 bool isLegal(const Board& board, const Move& move) { return isLegalAt(board, move, 0); }
 
@@ -396,7 +409,7 @@ void startGame(Game& game) {
 bool play(Game& game, const Move& move) {
   // Main-thread scratch, like hasLegalMoveAt's. The rules never run on the
   // render task: activities cache what a paint needs.
-  static MoveList pseudo;
+  MoveList& pseudo = gRulesScratch->pseudo;
   generatePseudo(game.board, pseudo);
   for (int i = 0; i < pseudo.count; ++i) {
     if (!sameMove(pseudo.moves[i], move)) continue;

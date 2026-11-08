@@ -14,10 +14,10 @@ namespace wikipedia {
 namespace {
 
 constexpr const char* kTag = "WIKI";
-// Compressed frames are read through this DRAM buffer in pieces: the SDMMC
-// driver degrades to single-sector commands when handed a PSRAM destination.
+// Compressed frames are read through a DRAM buffer in pieces: the SDMMC driver
+// degrades to single-sector commands when handed a PSRAM destination. This size
+// is within CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL, so malloc serves it from DRAM.
 constexpr size_t kBounceBytes = 4096;
-uint8_t g_bounce[kBounceBytes];
 
 bool readWhole(const char* path, std::vector<uint8_t>& out, const size_t maxBytes) {
   HalFile file;
@@ -28,11 +28,16 @@ bool readWhole(const char* path, std::vector<uint8_t>& out, const size_t maxByte
     return false;
   }
   out.resize(size);
+  auto bounce = makeUniqueNoThrow<uint8_t[]>(kBounceBytes);
+  if (!bounce) {
+    LOG_ERR(kTag, "OOM: bounce buffer");
+    return false;
+  }
   size_t done = 0;
   while (done < size) {
     const size_t want = std::min(kBounceBytes, size - done);
-    if (file.read(g_bounce, want) != static_cast<int>(want)) return false;
-    memcpy(out.data() + done, g_bounce, want);
+    if (file.read(bounce.get(), want) != static_cast<int>(want)) return false;
+    memcpy(out.data() + done, bounce.get(), want);
     done += want;
   }
   return true;
@@ -276,14 +281,20 @@ bool Pack::readBlock(const uint32_t block, std::vector<uint8_t>& raw, const char
     *error = "low memory";
     return false;
   }
+  auto bounce = makeUniqueNoThrow<uint8_t[]>(kBounceBytes);
+  if (!bounce) {
+    LOG_ERR(kTag, "OOM: bounce buffer");
+    *error = "low memory";
+    return false;
+  }
   size_t done = 0;
   while (done < rec.csize) {
     const size_t want = std::min(kBounceBytes, static_cast<size_t>(rec.csize - done));
-    if (file.read(g_bounce, want) != static_cast<int>(want)) {
+    if (file.read(bounce.get(), want) != static_cast<int>(want)) {
       *error = "shard read failed";
       return false;
     }
-    memcpy(compressed.data() + done, g_bounce, want);
+    memcpy(compressed.data() + done, bounce.get(), want);
     done += want;
   }
   raw.resize(rec.usize);

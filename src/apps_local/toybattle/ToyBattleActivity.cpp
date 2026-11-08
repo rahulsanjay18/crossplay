@@ -2,6 +2,7 @@
 
 #include <HalStorage.h>
 #include <Logging.h>
+#include <Memory.h>
 
 #include <cstdio>
 
@@ -22,8 +23,19 @@ static constexpr char kStatsPath[] = "/.crosspoint/toybattle.stats";
 static constexpr int kStatsVersion = 1;
 
 std::unique_ptr<Activity> ToyBattleActivity::create(GfxRenderer& renderer, MappedInputManager& mappedInput) {
-  return std::make_unique<ToyBattleActivity>(renderer, mappedInput);
+  if (!tb::acquireBrainScratch()) {
+    LOG_ERR("TOYB", "OOM: brain scratch");
+    return nullptr;
+  }
+  auto activity = makeUniqueNoThrow<ToyBattleActivity>(renderer, mappedInput);
+  if (!activity) {
+    LOG_ERR("TOYB", "OOM: activity");
+    tb::releaseBrainScratch();
+  }
+  return activity;
 }
+
+ToyBattleActivity::~ToyBattleActivity() { tb::releaseBrainScratch(); }
 
 void ToyBattleActivity::onEnter() {
   Activity::onEnter();

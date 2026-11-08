@@ -1,6 +1,10 @@
 #include "ToyBattleBrain.h"
 
 #include <cstring>
+#include <new>
+#include <type_traits>
+
+#include "../ui/SharedScratch.h"
 
 namespace toybattle {
 namespace {
@@ -62,6 +66,29 @@ constexpr int kMaxPlacementsOffered = 96;
 // The beam is tiny by design: move ordering means the answer is almost always
 // inside the first few, and every extra one costs a whole board of replies.
 constexpr int kMaxBeam = 24;
+
+// Everything the search holds, off the stack, and alive only while the game is
+// open. There is one brain and one turn at a time, so sharing it is safe.
+struct BrainScratch {
+  Step steps[kMaxPlacementsOffered];
+  Step extra[kMaxPlacementsOffered];
+  Game after, worstReply, reply, counter;
+  Observation foeObs, back;
+  Move options[kMaxCandidates];
+  int scores[kMaxCandidates];
+  Move beam[kMaxBeam];
+  int beamOrder[kMaxBeam];
+};
+static_assert(std::is_trivially_destructible<BrainScratch>::value, "released without running a destructor");
+
+#if defined(ARDUINO_ARCH_ESP32)
+toybox::SharedScratch gScratchStore;
+BrainScratch* gScratch = nullptr;
+#else
+// Host tests and tools play with no activity around them.
+BrainScratch gHostScratch;
+BrainScratch* const gScratch = &gHostScratch;
+#endif
 
 // A finished game, scored from `seat` and discounted by the ply it was found
 // at. `ply` is 1 for the move being considered, 2 for the reply to it, 3 for
@@ -316,7 +343,7 @@ int candidates(const Observation& obs, Move* out, int max) {
 
   // Off the stack for the same reason, and sized by measurement: 49 was the
   // most placements any position offered.
-  static Step steps[kMaxPlacementsOffered];
+  Step* const steps = gScratch->steps;
   const int placements = v.legalPlacements(seat, steps, kMaxPlacementsOffered);
 
   for (int i = 0; i < placements && n < max; ++i) {
@@ -345,7 +372,7 @@ int candidates(const Observation& obs, Move* out, int max) {
       Game staged = v;
       if (staged.apply(Move::place(slot, kind, false))) {
         staged.turn = static_cast<uint8_t>(seat);
-        static Step extra[kMaxPlacementsOffered];
+        Step* const extra = gScratch->extra;
         const int m2 = staged.legalPlacements(seat, extra, kMaxPlacementsOffered);
         const int cap = m2 < 24 ? m2 : 24;
         for (int j = 0; j < cap && n < max; ++j) {
@@ -423,6 +450,22 @@ const int kMaxCandidatesShipped = kMaxCandidates;
 const int kMaxPlacementsOfferedShipped = kMaxPlacementsOffered;
 }  // namespace detail
 
+#if !defined(ARDUINO_ARCH_ESP32)
+bool acquireBrainScratch() { return true; }
+void releaseBrainScratch() {}
+#else
+bool acquireBrainScratch() {
+  if (!gScratchStore.acquire(sizeof(BrainScratch))) return false;
+  if (gScratchStore.fresh()) gScratch = new (gScratchStore.get()) BrainScratch();
+  return true;
+}
+
+void releaseBrainScratch() {
+  gScratchStore.release();
+  if (gScratchStore.get() == nullptr) gScratch = nullptr;
+}
+#endif
+
 // The three rungs, shifted up one on 2026-08-11 after Mario played the fitted
 // brain and called the difficulty right. Every rung is now what the rung above
 // it used to be:
@@ -475,9 +518,13 @@ Move chooseMove(const Observation& obs, const Policy& policy) {
   // 256-byte rule, on a device whose task stacks are a few thousand. There is
   // one brain and one turn at a time, so sharing them is safe; the last version
   // of this file put 17KB on the stack and the simulator never noticed.
-  static Game after, worstReply, reply, counter;
-  static Observation foeObs, back;
-  static Move options[kMaxCandidates];
+  Game& after = gScratch->after;
+  Game& worstReply = gScratch->worstReply;
+  Game& reply = gScratch->reply;
+  Game& counter = gScratch->counter;
+  Observation& foeObs = gScratch->foeObs;
+  Observation& back = gScratch->back;
+  Move* const options = gScratch->options;
   const uint32_t startPositions = detail::cost.positions;
   const int n = detail::candidates(obs, options, kMaxCandidates);
   if (n == 0) return Move::draw();  // nothing is legal; the caller is about to end the game
@@ -487,7 +534,7 @@ Move chooseMove(const Observation& obs, const Policy& policy) {
   Move chosen = options[0];
   int bestScore = kLoss - 1;
   uint32_t bestJitter = 0;
-  static int scores[kMaxCandidates];
+  int* const scores = gScratch->scores;
 
   // Ties are broken by a hash of the position and the candidate, not by board
   // order. Deterministic, so the same position always produces the same move --
@@ -533,8 +580,8 @@ Move chooseMove(const Observation& obs, const Policy& policy) {
     // The greedy score above is the ordering, so a move has to survive being
     // answered rather than merely look good before anyone answers.
     const int width = policy.beam < n ? policy.beam : n;
-    static Move beam[kMaxBeam];
-    static int beamOrder[kMaxBeam];
+    Move* const beam = gScratch->beam;
+    int* const beamOrder = gScratch->beamOrder;
     int taken = 0;
     for (int slot = 0; slot < width; ++slot) {
       int pick = -1;
