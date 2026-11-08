@@ -81,6 +81,14 @@ SRC=../../src/apps_local/link
   test_hexlink.cpp -o "$BUILD_DIR/test_hexlink"
 "$BUILD_DIR/test_hexlink"
 
+# Shogi and Xiangqi, whose shared state carries a repetition ring beside the
+# board: two devices that agree on every piece but not on how often a position
+# has occurred would call the draw on one side only.
+"${CXX:-c++}" -std=c++17 -Wall -Wextra -Werror -O2 $SRC/LinkProtocol.cpp $SRC/LinkSession.cpp \
+  $SRC/LinkRadio.cpp $SRC/LinkPlay.cpp ../../src/apps_local/shogi/ShogiCore.cpp \
+  ../../src/apps_local/xiangqi/XiangqiCore.cpp test_boardlink.cpp -o "$BUILD_DIR/test_boardlink"
+"$BUILD_DIR/test_boardlink"
+
 # The end of a match: the record that was never written and the final board the
 # loser was never shown. Real link, real Connect Four rules, real Endgame; see
 # test_endgame.cpp for what it does and does not cover.

@@ -34,6 +34,7 @@
 #include "picross/PicrossActivity.h"
 #include "player/PlayerActivity.h"
 #include "seasalt/SeaSaltActivity.h"
+#include "shogi/ShogiActivity.h"
 #include "solitaire/SolitaireActivity.h"
 #include "study/StudyActivity.h"
 #include "sudoku/SudokuActivity.h"
@@ -45,6 +46,7 @@
 #include "wavelength/WavelengthActivity.h"
 #include "wikipedia/WikipediaActivity.h"
 #include "wordle/WordleActivity.h"
+#include "xiangqi/XiangqiActivity.h"
 #include "xkcd/XkcdActivity.h"
 #include "yahtzee/YahtzeeActivity.h"
 
@@ -76,6 +78,8 @@ constexpr shelf::Item kGames[] = {
     {"TRIVIA", &icon_trivia_32, &TriviaActivity::create},
     {"WAVELENGTH", &icon_wavelength_32, &WavelengthActivity::create},
     {"GO", &icon_go_32, &GoActivity::create},
+    {"SHOGI", &icon_shogi_32, &ShogiActivity::create},
+    {"XIANGQI", &icon_xiangqi_32, &XiangqiActivity::create},
     {"HEX", &icon_hex_32, &HexActivity::create},
     {"UNDERHAND", &icon_underhand_32, &UnderhandActivity::create},
     {"WORDLE", &icon_wordle_32, &WordleActivity::create},

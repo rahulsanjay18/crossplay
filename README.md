@@ -26,7 +26,7 @@ devices with an 800x480 panel, capacitive touch and two physical buttons
 (three on the Sticky; the design uses the two shared buttons), and
 [CrossPoint](https://crosspointreader.com/) already makes them good at reading.
 CrossPlay is firmware that keeps all of that and adds the other things a screen
-that holds still is good at: **25 games and 8 apps**,
+that holds still is good at: **27 games and 8 apps**,
 spaced-repetition flashcards, comics, a read-later queue, and two devices that
 play together with nothing to set up.
 
@@ -72,6 +72,8 @@ the import lands a real pack instead of failing on an unreachable host.
 | **Trivia**       | 50,000 questions off 42 years of Jeopardy. Read them out, or play alone.     |
 | **Wavelength**   | A hidden point on a spectrum, one clue, and the whole table arguing.         |
 | **Go**           | 9x9, 13x13 or 19x19, against the device or someone next to you. It counts.   |
+| **Shogi**        | Japanese chess: captured pieces change sides and drop back in. Solo or nearby. |
+| **Xiangqi**      | Chinese chess on the points, across the river, into the palace. Solo or nearby. |
 | **Hex**          | Join your two edges before they join theirs. No captures, and no draws.      |
 | **Underhand**    | The 2017 cult card game: bribe, sacrifice, dodge the police, summon a god.   |
 | **Wordle**       | Six guesses for the day's word, with every past day in an archive.           |
@@ -97,8 +99,8 @@ browser are theirs and stay theirs.
 
 ### Two devices, nothing to type
 
-Eleven of the games play over **PLAY NEARBY**: Chess, Checkers, Connect Four,
-Yahtzee, Knucklebones, Battleship, Jaipur, Sea Salt, Toy Battle, Go and Hex. Put
+Thirteen of the games play over **PLAY NEARBY**: Chess, Checkers, Connect Four,
+Yahtzee, Knucklebones, Battleship, Jaipur, Sea Salt, Toy Battle, Go, Shogi, Xiangqi and Hex. Put
 two devices next to each other and they find one another. No pairing screen, no
 room code, no account, no router, no internet.
 

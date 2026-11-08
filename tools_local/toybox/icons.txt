@@ -465,3 +465,14 @@ wordle        = spell-check
 # The keyboard's delete key: Lucide's `delete` is a backspace key, which is the
 # thing on every phone keyboard, where an arrow alone read as "go back".
 wordle_delete = delete
+
+# SHOGI's pieces ARE pentagons -- the wedge every shogi set is cut in -- so the
+# plainest Lucide shape is also the most literal one. Spliced by hand per the
+# warning at the top of this file. Rejected: `crown` (chess owns it).
+shogi       = pentagon
+
+# XIANGQI is played toward a palace, and the palace is the part of the board no
+# other game has. `landmark` is a columned building, a silhouette nothing else
+# on the shelf shares. Rejected: `castle` (a rook, which is chess's piece and
+# mush at 32px), `circle` (a plain disc says nothing).
+xiangqi     = landmark
