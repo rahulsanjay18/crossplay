@@ -1,11 +1,10 @@
 # Pick-up checklist, 2026-11-08
 
-Branch: `feature/shogi-xiangqi-fork-updates`, committed locally and **not pushed**:
-git has no GitHub credentials on this machine. No pull request opened, and
+Branch: `feature/shogi-xiangqi-fork-updates`, pushed over SSH. No pull request opened, and
 `xteink` is unchanged. Gate: `check.sh --committed` was green, run with
 `CHECK_ALLOW_UNDO=1` because deleting the uploaded `.patch` looks like a revert.
 
-- [ ] Log git in to GitHub, then `git push -u origin feature/shogi-xiangqi-fork-updates`.
+- [ ] Optional: `git remote set-url origin git@github.com:rahulsanjay18/crossplay.git`, since `origin` is HTTPS and has no login here.
 
 ## Try on the device
 
