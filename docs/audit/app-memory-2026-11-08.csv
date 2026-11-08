@@ -1,0 +1,43 @@
+app,folder,flash_saved_if_disabled_bytes,ram_static_data_bytes,ram_static_bss_bytes,iram_bytes,ram_permanent_total_bytes,activity_sizeof_bytes,activity_heap_region,extra_open_heap_bytes,extra_open_heap_note,sim_open_live_heap_delta_bytes,map_code_bytes,map_rodata_bytes,sd_movable,sd_note
+UNDERHAND,games,330784,0,336,0,336,2728,internal,40652,uh::Cards 38956 + CardModel 1696 on open,44408,43366,287100,yes,277 KB card text in UnderhandActivity.cpp rodata
+WIKIPEDIA,apps,98704,32,4104,0,4136,3536,internal,0,"article and index vectors, content dependent",13512,38756,9751,already,content is an SD pack
+TOY BATTLE,games,75680,21472,2160,0,23632,3276,internal,0,,4328,34314,19754,no,
+STUDY,apps,68816,32,8,0,40,7464,psram,0,"deck vectors, content dependent",22232,58096,11773,no,
+WALLPAPERS,apps,60576,0,0,0,0,1992,internal,3200,CrossPointWebServer while upload is on,36184,40964,11278,no,
+GO,games,50672,544,35872,448,36416,4828,psram,32768,go_search task stack while open,5544,39555,7705,no,
+FOREHEAD,games,47216,0,0,0,0,1720,internal,0,,2696,13180,38723,yes,32 KB word decks in ForeheadCore.cpp
+INSTAPAPER,apps,43456,0,0,0,0,2176,internal,0,"article vectors, content dependent",3432,38459,6917,no,
+SEA SALT,games,42320,64,0,0,64,3324,internal,0,,4280,25060,17253,no,
+JAIPUR,games,37408,0,0,0,0,3132,internal,0,,4088,25106,12608,no,
+WAVELENGTH,games,36752,0,0,0,0,1112,internal,0,,2040,21838,15462,no,
+MURDLE,games,36672,0,80,0,80,1448,internal,6244,murdle::Scratch while solving,2424,27897,8420,no,
+PICROSS,games,34944,0,0,0,0,1160,internal,0,,2072,13343,24201,no,
+D&DIAGRAMS,games,28592,0,0,0,0,1032,internal,0,,2040,11433,20029,no,
+HACKER NEWS,apps,28560,0,0,0,0,1812,internal,0,"story vectors, content dependent",2984,28119,6861,no,
+INSIDER,games,27840,0,0,0,0,1064,internal,0,,2040,16546,14000,no,
+XKCD,apps,26848,0,7328,0,7328,4124,psram,0,,5840,21362,5761,already,content is an SD pack
+CHESS,games,24096,0,0,0,0,12472,psram,2048,"2 KiB buffer, transient, during save/load",13480,15395,8548,no,
+SUDOKU,games,24080,0,0,0,0,3000,internal,0,,3944,18451,5864,no,
+TRIVIA,games,23968,0,0,0,0,1908,internal,0,,3040,18267,6623,already,content is an SD pack
+HEARTS,games,23520,0,1736,0,1736,1548,internal,0,,2824,18228,4971,no,
+NOTES,apps,23088,0,0,0,0,1208,internal,3200,CrossPointWebServer while the web editor is on,133576,31201,5308,no,
+HEX,games,22736,0,0,0,0,4220,psram,2113536,2 MiB search pool in PSRAM + 16 KiB hex_search stack,2106248,16680,5321,no,
+CONNECTIONS,games,22256,0,32,0,32,2208,internal,0,,3224,24176,4683,no,
+WORDLE,games,20656,0,0,0,0,1420,internal,0,"word list sized by its SD file, not fixed",2376,16541,4811,already,word list is on SD
+SHOGI,games,20608,0,7232,0,7232,30508,psram,0,,31464,17096,3662,no,
+XIANGQI,games,19216,0,544,0,544,7884,psram,0,,8840,15720,3685,no,
+YAHTZEE,games,17344,0,0,0,0,3680,internal,0,,4632,14011,3599,no,
+CALCULATOR,apps,17008,0,8,0,8,1208,internal,0,,2696,5591,32839,yes,32 KB CalcFonts.cpp; needs a font loaded to RAM
+SOLITAIRE,games,15520,0,1728,0,1728,2176,internal,0,,3480,11441,3361,no,
+BATTLESHIP,games,15168,0,0,0,0,2996,internal,0,,4024,14224,4410,no,
+KNUCKLEBONES,games,14832,0,0,0,0,3680,internal,0,,4744,11240,3504,no,
+CONNECT FOUR,games,14208,0,0,0,0,3744,internal,0,,4744,10606,3433,no,
+MINESWEEPER,games,13920,0,0,0,0,1152,internal,0,,2168,10192,3425,no,
+CHECKERS,games,13488,0,0,0,0,4224,psram,0,,5240,12891,3313,no,
+ui (shared library),shared,,,261,,,,,,,,1166,219130,,
+player (shared library),shared,,,21,,,,,,,,3657,94551,,
+link (shared library),shared,,,4,,,,,,,,10058,4085,,
+cards (shared library),shared,,,0,,,,,,,,1710,2953,,
+bridge (shared library),shared,,,16,,,,,,,,6046,6353,,
+live (shared library),shared,,,22,,,,,,,,14523,3014,,
+powerprobe (shared library),shared,,,20,,,,,,,,621,255,,

@@ -37,6 +37,10 @@ mkdir -p "$BUILD_DIR"
   ../../src/apps_local/ShelfScreen.cpp \
   ../../src/apps_local/chess/ChessScreens.cpp \
   ../../src/apps_local/checkers/CheckersScreens.cpp \
+  ../../src/apps_local/shogi/ShogiScreens.cpp \
+  ../../src/apps_local/shogi/ShogiCore.cpp \
+  ../../src/apps_local/xiangqi/XiangqiScreens.cpp \
+  ../../src/apps_local/xiangqi/XiangqiCore.cpp \
   ../../src/apps_local/go/GoScreens.cpp \
   ../../src/apps_local/go/GoCore.cpp \
   ../../src/apps_local/connectfour/ConnectFourScreens.cpp \

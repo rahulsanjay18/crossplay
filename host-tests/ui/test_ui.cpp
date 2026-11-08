@@ -42,6 +42,7 @@
 #include "../../src/apps_local/player/PlayerAvatar.h"
 #include "../../src/apps_local/player/PlayerScreen.h"
 #include "../../src/apps_local/seasalt/SeaSaltScreens.h"
+#include "../../src/apps_local/shogi/ShogiScreens.h"
 #include "../../src/apps_local/solitaire/SolitaireScreens.h"
 #include "../../src/apps_local/study/StudyScreens.h"
 #include "../../src/apps_local/sudoku/SudokuScreens.h"
@@ -57,6 +58,7 @@
 #include "../../src/apps_local/wavelength/WavelengthScreens.h"
 #include "../../src/apps_local/wikipedia/WikipediaScreens.h"
 #include "../../src/apps_local/wordle/WordleScreens.h"
+#include "../../src/apps_local/xiangqi/XiangqiScreens.h"
 #include "../../src/apps_local/xkcd/XkcdScreens.h"
 #include "../../src/apps_local/yahtzee/YahtzeeScreens.h"
 
@@ -14865,6 +14867,282 @@ void theMenuOffersTodayOnlyWhenThereIsOne() {
 
 }  // namespace wordletest
 
+// --- shogi -----------------------------------------------------------------
+
+template <typename Model, void (*Build)(toybox::Screen&, const Model&)>
+void buildBoardGame(Rendered& out, const Model& model) {
+  const fui::InputSnapshot noInput{};
+  toybox::Frame frame(out.target, device(), noInput, out.interactions);
+  toybox::Screen screen(frame, toybox::themeTokens());
+  Build(screen, model);
+}
+
+// The board is drawn from the bottom player's side, so the same square sits in
+// a different place for each seat; squareRect and squareAt must be exact
+// inverses for both, at every corner of every square.
+void testShogiTheSquareYouTapIsTheSquareTheRulesGet() {
+  const uint8_t seats[] = {shogi::kSente, shogi::kGote};
+  for (const uint8_t seat : seats) {
+    for (int file = 0; file < shogi::kFiles; ++file) {
+      for (int rank = 0; rank < shogi::kRanks; ++rank) {
+        const fui::Rect box = shogiui::squareRect(device(), file, rank, seat);
+        const int probes[4][2] = {{box.x, box.y},
+                                  {box.x + box.width - 1, box.y},
+                                  {box.x, box.y + box.height - 1},
+                                  {box.x + box.width - 1, box.y + box.height - 1}};
+        for (const auto& probe : probes) {
+          int gotFile = -1;
+          int gotRank = -1;
+          CHECK(shogiui::squareAt(device(), probe[0], probe[1], seat, gotFile, gotRank));
+          CHECK(gotFile == file && gotRank == rank);
+        }
+      }
+    }
+  }
+  // Sente sees their own back rank at the bottom; Gote sees theirs.
+  CHECK(shogiui::squareRect(device(), 4, 8, shogi::kSente).y > shogiui::squareRect(device(), 4, 0, shogi::kSente).y);
+  CHECK(shogiui::squareRect(device(), 4, 0, shogi::kGote).y > shogiui::squareRect(device(), 4, 8, shogi::kGote).y);
+  // The board stays clear of the header and of both hand strips.
+  CHECK(shogiui::squareRect(device(), 0, 0, shogi::kSente).y > toybox::kChromeHeight);
+  for (int slot = 0; slot < shogi::kHandOrderCount; ++slot) {
+    int f = 0;
+    int r = 0;
+    const fui::Rect top = shogiui::handSlotRect(device(), false, slot);
+    const fui::Rect bottom = shogiui::handSlotRect(device(), true, slot);
+    CHECK(!shogiui::squareAt(device(), top.x + 5, top.y + 5, shogi::kSente, f, r));
+    CHECK(!shogiui::squareAt(device(), bottom.x + 5, bottom.y + 5, shogi::kSente, f, r));
+  }
+}
+
+void testShogiTheHandSlotYouTapIsTheOneDrawn() {
+  for (int pass = 0; pass < 2; ++pass) {
+    const bool bottom = pass == 1;
+    for (int slot = 0; slot < shogi::kHandOrderCount; ++slot) {
+      const fui::Rect box = shogiui::handSlotRect(device(), bottom, slot);
+      const int probes[2][2] = {{box.x, box.y}, {box.x + box.width - 1, box.y + box.height - 1}};
+      for (const auto& probe : probes) {
+        bool gotBottom = !bottom;
+        int gotSlot = -1;
+        CHECK(shogiui::handSlotAt(device(), probe[0], probe[1], gotBottom, gotSlot));
+        CHECK(gotBottom == bottom && gotSlot == slot);
+      }
+    }
+  }
+  // The strips sit above and below the board, not over it.
+  CHECK(shogiui::handSlotRect(device(), false, 0).bottom() < shogiui::squareRect(device(), 0, 0, shogi::kSente).y);
+  CHECK(shogiui::handSlotRect(device(), true, 0).y > shogiui::squareRect(device(), 0, 8, shogi::kSente).bottom());
+  // And the capsule below them.
+  CHECK(shogiui::promoteRect(device()).y > shogiui::handSlotRect(device(), true, 0).bottom());
+  CHECK(shogiui::promoteRect(device()).bottom() <= 800);
+}
+
+void testShogiThePromotionQuestionIsTwoButtons() {
+  shogiui::BoardModel model;
+  shogi::start(model.board);
+  model.askPromotion = true;
+  Rendered out;
+  buildBoardGame<shogiui::BoardModel, shogiui::buildBoard>(out, model);
+  CHECK(out.target.drew("PROMOTE"));
+  CHECK(out.target.drew("DON'T"));
+  const fui::Rect promote = shogiui::promoteRect(device());
+  const fui::Rect keep = shogiui::keepRect(device());
+  // Both edges of both buttons, because a pill once painted wider than it was
+  // hit-tested and its outer thirds were dead.
+  CHECK(out.tap(promote.x + 2, promote.y + promote.height / 2).action == shogiui::ActionPromote);
+  CHECK(out.tap(promote.x + promote.width - 3, promote.y + promote.height / 2).action == shogiui::ActionPromote);
+  CHECK(out.tap(keep.x + 2, keep.y + keep.height / 2).action == shogiui::ActionKeep);
+  CHECK(out.tap(keep.x + keep.width - 3, keep.y + keep.height / 2).action == shogiui::ActionKeep);
+  CHECK(promote.x + promote.width < keep.x);
+  CHECK(!out.interactions.overflowed());
+
+  // Without the question the capsule is a status, and tapping it does nothing.
+  model.askPromotion = false;
+  model.status = "YOUR MOVE";
+  Rendered plain;
+  buildBoardGame<shogiui::BoardModel, shogiui::buildBoard>(plain, model);
+  CHECK(plain.target.drew("YOUR MOVE"));
+  CHECK(!plain.target.drew("PROMOTE"));
+  CHECK(!plain.has(shogiui::ActionPromote));
+  CHECK(plain.tap(promote.x + 10, promote.y + 10).action == fui::NO_ACTION);
+}
+
+void testShogiTheBoardDrawsEveryPieceAndHand() {
+  shogiui::BoardModel model;
+  shogi::parseSfen("4k4/9/9/9/9/9/9/9/4K4 b R2Pb 1", model.board);
+  Rendered out;
+  buildBoardGame<shogiui::BoardModel, shogiui::buildBoard>(out, model);
+  // Two kings on the board, a rook and pawns in Sente's hand, a bishop in Gote's.
+  int kings = 0;
+  for (const auto& run : out.target.texts) {
+    if (run.text == "K") ++kings;
+  }
+  CHECK(kings == 2);
+  CHECK(out.target.drew("R"));
+  CHECK(out.target.drew("P"));
+  CHECK(out.target.drew("B"));
+  CHECK(out.target.drew("2"));  // the pawn count
+  // Promoted pieces wear the Western "+" marks; the shipped cuts carry no kanji.
+  CHECK(std::strcmp(shogiui::pieceLabel(shogi::Dragon), "+R") == 0);
+  CHECK(std::strcmp(shogiui::pieceLabel(shogi::Tokin), "+P") == 0);
+}
+
+void testShogiTheMenuRoutesEveryRow() {
+  for (int withSave = 0; withSave < 2; ++withSave) {
+    shogiui::MenuModel model;
+    model.canContinue = withSave == 1;
+    Rendered out;
+    buildBoardGame<shogiui::MenuModel, shogiui::buildMenu>(out, model);
+    CHECK(out.target.drew("SHOGI"));
+    CHECK(out.target.drew("PLAY THE COMPUTER"));
+    CHECK(out.target.drew("TWO PLAYERS"));
+    CHECK(out.target.drew("PLAY NEARBY"));
+    CHECK(out.target.drew("HOW TO PLAY"));
+    CHECK(out.target.drew("CONTINUE") == model.canContinue);
+    // Each row routes to its identity, not its position: CONTINUE comes and
+    // goes and must not shift what the other rows mean.
+    bool seen[static_cast<int>(shogiui::MenuRow::Count)] = {};
+    for (int y = 100; y < 800; y += 4) {
+      const fui::ActionEvent event = out.tap(240, y);
+      if (event.action != shogiui::ActionMenuRow) continue;
+      CHECK(event.value >= 0 && event.value < static_cast<int>(shogiui::MenuRow::Count));
+      if (event.value >= 0 && event.value < static_cast<int>(shogiui::MenuRow::Count)) seen[event.value] = true;
+    }
+    CHECK(seen[static_cast<int>(shogiui::MenuRow::Continue)] == model.canContinue);
+    CHECK(seen[static_cast<int>(shogiui::MenuRow::Computer)]);
+    CHECK(seen[static_cast<int>(shogiui::MenuRow::Friend)]);
+    CHECK(seen[static_cast<int>(shogiui::MenuRow::Nearby)]);
+    CHECK(seen[static_cast<int>(shogiui::MenuRow::HowTo)]);
+    CHECK(!out.interactions.overflowed());
+  }
+}
+
+void testShogiHowToAndResult() {
+  for (int page = 0; page < shogiui::howToPages(); ++page) {
+    shogiui::HowToModel model;
+    model.page = page;
+    Rendered out;
+    buildBoardGame<shogiui::HowToModel, shogiui::buildHowTo>(out, model);
+    CHECK(out.target.drew(page + 1 < shogiui::howToPages() ? "TAP TO CONTINUE" : "TAP TO FINISH"));
+    CHECK(out.tap(240, 400).action == shogiui::ActionHowToNext);
+  }
+  shogiui::ResultModel result;
+  result.title = "YOU WIN";
+  result.reason = "CHECKMATE";
+  result.plies = 57;
+  Rendered out;
+  buildBoardGame<shogiui::ResultModel, shogiui::buildResult>(out, result);
+  CHECK(out.target.drew("YOU WIN"));
+  CHECK(out.target.drew("CHECKMATE"));
+  CHECK(out.target.drew("57 MOVES"));
+  CHECK(out.has(shogiui::ActionAgain));
+  CHECK(out.has(shogiui::ActionDone));
+}
+
+// --- xiangqi ---------------------------------------------------------------
+
+void testXiangqiThePointYouTapIsThePointTheRulesGet() {
+  const uint8_t seats[] = {xiangqi::kRed, xiangqi::kBlack};
+  for (const uint8_t seat : seats) {
+    for (int file = 0; file < xiangqi::kFiles; ++file) {
+      for (int rank = 0; rank < xiangqi::kRanks; ++rank) {
+        const fui::Rect box = xiangqiui::pointRect(device(), file, rank, seat);
+        const int probes[4][2] = {{box.x, box.y},
+                                  {box.x + box.width - 1, box.y},
+                                  {box.x, box.y + box.height - 1},
+                                  {box.x + box.width - 1, box.y + box.height - 1}};
+        for (const auto& probe : probes) {
+          int gotFile = -1;
+          int gotRank = -1;
+          CHECK(xiangqiui::pointAt(device(), probe[0], probe[1], seat, gotFile, gotRank));
+          CHECK(gotFile == file && gotRank == rank);
+        }
+      }
+    }
+  }
+  CHECK(xiangqiui::pointRect(device(), 4, 9, xiangqi::kRed).y > xiangqiui::pointRect(device(), 4, 0, xiangqi::kRed).y);
+  CHECK(xiangqiui::pointRect(device(), 4, 0, xiangqi::kBlack).y >
+        xiangqiui::pointRect(device(), 4, 9, xiangqi::kBlack).y);
+  CHECK(xiangqiui::pointRect(device(), 0, 0, xiangqi::kRed).y > toybox::kChromeHeight);
+  int f = 0;
+  int r = 0;
+  CHECK(!xiangqiui::pointAt(device(), 240, toybox::kHeaderHeight / 2, xiangqi::kRed, f, r));
+}
+
+void testXiangqiTheBoardDrawsThePiecesAndTheRiver() {
+  xiangqiui::BoardModel model;
+  xiangqi::start(model.board);
+  model.status = "YOUR MOVE";
+  Rendered out;
+  buildBoardGame<xiangqiui::BoardModel, xiangqiui::buildBoard>(out, model);
+  int soldiers = 0;
+  int generals = 0;
+  for (const auto& run : out.target.texts) {
+    if (run.text == "P") ++soldiers;
+    if (run.text == "K") ++generals;
+  }
+  CHECK(soldiers == 10);
+  CHECK(generals == 2);
+  CHECK(out.target.drew("YOUR MOVE"));
+  CHECK(out.target.drew("THEM"));
+  CHECK(out.target.drew("YOU"));
+  // Ten ranks, two edge files, seven inner files broken by the river (two
+  // segments each) and four palace diagonals.
+  CHECK(out.target.lines.size() == 10 + 2 + 7 * 2 + 4);
+  // The status capsule is not a control.
+  CHECK(!out.interactions.overflowed());
+
+  // A capture: one lost black soldier shows in THEM's strip.
+  model.board.cell[xiangqi::indexOf(0, 3)] = 0;
+  Rendered after;
+  buildBoardGame<xiangqiui::BoardModel, xiangqiui::buildBoard>(after, model);
+  int soldiersAfter = 0;
+  for (const auto& run : after.target.texts) {
+    if (run.text == "P") ++soldiersAfter;
+  }
+  CHECK(soldiersAfter == 10);  // nine on the board, one in the strip
+}
+
+void testXiangqiTheMenuRoutesEveryRow() {
+  for (int withSave = 0; withSave < 2; ++withSave) {
+    xiangqiui::MenuModel model;
+    model.canContinue = withSave == 1;
+    Rendered out;
+    buildBoardGame<xiangqiui::MenuModel, xiangqiui::buildMenu>(out, model);
+    CHECK(out.target.drew("XIANGQI"));
+    CHECK(out.target.drew("CONTINUE") == model.canContinue);
+    bool seen[static_cast<int>(xiangqiui::MenuRow::Count)] = {};
+    for (int y = 100; y < 800; y += 4) {
+      const fui::ActionEvent event = out.tap(240, y);
+      if (event.action != xiangqiui::ActionMenuRow) continue;
+      if (event.value >= 0 && event.value < static_cast<int>(xiangqiui::MenuRow::Count)) seen[event.value] = true;
+    }
+    CHECK(seen[static_cast<int>(xiangqiui::MenuRow::Continue)] == model.canContinue);
+    CHECK(seen[static_cast<int>(xiangqiui::MenuRow::Computer)]);
+    CHECK(seen[static_cast<int>(xiangqiui::MenuRow::Friend)]);
+    CHECK(seen[static_cast<int>(xiangqiui::MenuRow::Nearby)]);
+    CHECK(seen[static_cast<int>(xiangqiui::MenuRow::HowTo)]);
+  }
+}
+
+void testXiangqiHowToAndResult() {
+  for (int page = 0; page < xiangqiui::howToPages(); ++page) {
+    xiangqiui::HowToModel model;
+    model.page = page;
+    Rendered out;
+    buildBoardGame<xiangqiui::HowToModel, xiangqiui::buildHowTo>(out, model);
+    CHECK(out.target.drew(page + 1 < xiangqiui::howToPages() ? "TAP TO CONTINUE" : "TAP TO FINISH"));
+    CHECK(out.tap(240, 400).action == xiangqiui::ActionHowToNext);
+  }
+  xiangqiui::ResultModel result;
+  result.title = "RED WINS";
+  result.reason = "CHECKMATE";
+  Rendered out;
+  buildBoardGame<xiangqiui::ResultModel, xiangqiui::buildResult>(out, result);
+  CHECK(out.target.drew("RED WINS"));
+  CHECK(out.has(xiangqiui::ActionAgain));
+  CHECK(out.has(xiangqiui::ActionDone));
+}
+
 int main() {
   notestest::aNoteAsleepIsReadOnlyAndTaller();
   wordletest::everyKeyIsWhereItIsDrawn();
@@ -15061,6 +15339,16 @@ int main() {
   testTheHexSettingsSayOnlyTheirRows();
   testTheHexFrontDoorIsTheBoardAndTheRecord();
   testTheSquareYouTapIsTheSquareTheRulesGet();
+  testShogiTheSquareYouTapIsTheSquareTheRulesGet();
+  testShogiTheHandSlotYouTapIsTheOneDrawn();
+  testShogiThePromotionQuestionIsTwoButtons();
+  testShogiTheBoardDrawsEveryPieceAndHand();
+  testShogiTheMenuRoutesEveryRow();
+  testShogiHowToAndResult();
+  testXiangqiThePointYouTapIsThePointTheRulesGet();
+  testXiangqiTheBoardDrawsThePiecesAndTheRiver();
+  testXiangqiTheMenuRoutesEveryRow();
+  testXiangqiHowToAndResult();
   testTheBoardKeepsOffTheChrome();
   testTheBoardSaysWhoseMoveAndWho();
   testTheResultNamesTheOutcomeFromYourSeat();
