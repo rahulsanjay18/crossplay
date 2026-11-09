@@ -19,8 +19,10 @@
 class ShogiActivity final : public linkplay::LinkActivity {
  public:
   ShogiActivity(GfxRenderer& renderer, MappedInputManager& mappedInput)
-      : linkplay::LinkActivity("Shogi", renderer, mappedInput) {}
-  ~ShogiActivity() override = default;
+      : linkplay::LinkActivity("Shogi", renderer, mappedInput) {
+    shogi::setRulesScratch(&rulesScratch);
+  }
+  ~ShogiActivity() override { shogi::clearRulesScratch(&rulesScratch); }
 
   static std::unique_ptr<Activity> create(GfxRenderer& renderer, MappedInputManager& mappedInput);
 
@@ -85,6 +87,7 @@ class ShogiActivity final : public linkplay::LinkActivity {
 
   bool engineThinking = false;
   shogi::SearchBuffers searchBuffers;
+  shogi::RulesScratch rulesScratch;
 
   int wins = 0;
   int losses = 0;

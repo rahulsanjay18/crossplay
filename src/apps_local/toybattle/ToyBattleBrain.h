@@ -109,6 +109,11 @@ Move chooseMove(const Observation& obs, const Policy& policy);
 
 // Exposed for the tests, which need to ask the questions the brain asks
 // without reaching inside it.
+// The search's working memory, held from create() until the activity goes. On
+// a device chooseMove must run between the two.
+bool acquireBrainScratch();
+void releaseBrainScratch();
+
 namespace detail {
 
 // Can the seat that is *not* `seat` place a troop on one of `seat`'s H.Q. right

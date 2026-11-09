@@ -106,6 +106,16 @@ struct MoveList {
   }
 };
 
+// Scratch for the rules. On a device the activity owns one, so it exists only
+// while Shogi is open, and it must be registered before the rules are asked
+// anything. Main thread only: the rules never run on the render task.
+struct RulesScratch {
+  MoveList legal[2];
+  MoveList pseudo;
+};
+void setRulesScratch(RulesScratch* scratch);
+void clearRulesScratch(const RulesScratch* scratch);
+
 inline int fileOf(const int index) { return index % kFiles; }
 inline int rankOf(const int index) { return index / kFiles; }
 inline int indexOf(const int file, const int rank) { return rank * kFiles + file; }

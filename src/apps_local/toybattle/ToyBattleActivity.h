@@ -21,7 +21,7 @@ class ToyBattleActivity final : public linkplay::LinkActivity {
  public:
   ToyBattleActivity(GfxRenderer& renderer, MappedInputManager& mappedInput)
       : linkplay::LinkActivity("ToyBattle", renderer, mappedInput) {}
-  ~ToyBattleActivity() override = default;
+  ~ToyBattleActivity() override;
 
   static std::unique_ptr<Activity> create(GfxRenderer& renderer, MappedInputManager& mappedInput);
 
