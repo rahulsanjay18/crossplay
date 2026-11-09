@@ -8,6 +8,7 @@
 // where a screen bug hides.
 
 #include "../ui/ToyboxScreen.h"
+#include "ChessEngine.h"
 
 namespace chessui {
 
@@ -53,7 +54,7 @@ struct SettingsModel {
   bool humanPlaysWhite = true;
   bool showHints = true;
   // 0 easy, 1 normal, 2 hard.
-  uint8_t level = 1;
+  uint8_t level = chess::kDefaultLevel;
   bool canTakeBack = false;
   // A setting that cannot apply mid-game was changed while the menu was open,
   // so leaving will start a new one and the close button has to say so.

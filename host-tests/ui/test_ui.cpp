@@ -861,9 +861,9 @@ void testRowModel() {
   CHECK(chessui::rowAt(vsComputer, 99) == chessui::MenuRow::Hints);
 
   chessui::SettingsModel model;
-  model.level = 0;
+  model.level = 1;
   CHECK(std::string(chessui::rowValue(model, chessui::MenuRow::Level)) == "EASY");
-  model.level = 2;
+  model.level = 7;
   CHECK(std::string(chessui::rowValue(model, chessui::MenuRow::Level)) == "HARD");
   model.humanPlaysWhite = false;
   CHECK(std::string(chessui::rowValue(model, chessui::MenuRow::PlayAs)) == "BLACK");

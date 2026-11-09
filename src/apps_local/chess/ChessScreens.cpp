@@ -66,7 +66,7 @@ const char* rowValue(const SettingsModel& model, const MenuRow row) {
     case MenuRow::TakeBack:
       return model.canTakeBack ? "" : "NONE";
     case MenuRow::Level:
-      return model.level == 0 ? "EASY" : (model.level == 1 ? "NORMAL" : "HARD");
+      return chess::kLevels[model.level].name;
     case MenuRow::PlayAs:
       return model.humanPlaysWhite ? "WHITE" : "BLACK";
     case MenuRow::Opponent:
