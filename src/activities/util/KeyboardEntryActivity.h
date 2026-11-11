@@ -11,7 +11,7 @@
 #include "activities/Activity.h"
 #include "util/ButtonNavigator.h"
 
-enum class InputType { Text, Password, Url };
+enum class InputType { Text, Password, Url, Markdown };
 
 // Text entry on the FreeInkUI keyboard component: the SDK layout tables and
 // keyboard() do the key rendering and hit-rect registration, InteractionBuffer
@@ -55,7 +55,8 @@ class KeyboardEntryActivity : public Activity {
   bool showLangKey = false;
   bool shifted = false;
   bool symbols = false;
-  bool urlPanel = false;  // URL snippet panel replaces the letter layer
+  bool urlPanel = false;       // URL snippet panel replaces the letter layer
+  bool markdownPanel = false;  // the Markdown and math keys replace the letters
 
   // Key hit rects registered by the keyboard component during render(); loop()
   // routes touch snapshots against them. The 5-row EN layout registers 41 keys,
@@ -164,4 +165,5 @@ class KeyboardEntryActivity : public Activity {
 
   // App-specific key id: toggles the URL snippet panel (URL fields only).
   static constexpr int16_t URL_PANEL_KEY = -3;
+  static constexpr int16_t MARKDOWN_PANEL_KEY = -20;
 };

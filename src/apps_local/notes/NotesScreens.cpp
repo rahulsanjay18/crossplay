@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "../ui/ToyboxText.h"
+#include "NotesMarkdown.h"
 
 namespace notesui {
 namespace {
@@ -564,11 +565,32 @@ constexpr int16_t kGrowCap = 36;  // the most a row grows when the whole list fi
 
 // A list: one block per item. A note: one block per LINE, so a long paragraph
 // continues on the next page rather than being shrunk or cut.
+// One stretch of a Markdown line in one face. x and y are offsets into the
+// block's own line box.
+struct Run {
+  std::string text;
+  NoteFace face = NoteFace::Body;
+  int16_t x = 0;
+  int16_t y = 0;
+};
+
+struct Bar {
+  int16_t x = 0;
+  int16_t y = 0;
+  int16_t width = 0;
+};
+
 struct Block {
   int item = 0;
   std::vector<std::string> lines;  // exactly what is drawn, already broken
   int16_t height = 0;              // before any growth
   bool paragraphStart = false;     // a note: the first line of a paragraph
+  std::vector<Run> runs;           // a note: what the Markdown line draws
+  std::vector<Bar> bars;           // fraction bars
+  bool rule = false;
+  bool quote = false;
+  bool bullet = false;
+  int16_t indent = 0;
 };
 
 struct NoteFlow {
@@ -582,6 +604,278 @@ struct NoteFlow {
 // Room the page label takes at the foot of a paged band.
 int16_t pageLabelReserve(const fui::DrawTarget& target) {
   return static_cast<int16_t>(target.lineHeight(toybox::kTileFont) + toybox::kGutter);
+}
+
+constexpr fui::FontId kRunSlot = 3;
+constexpr int16_t kBulletIndent = 28;
+constexpr int16_t kQuoteIndent = 16;
+constexpr int16_t kCodeIndent = 12;
+constexpr int16_t kRuleHeight = 18;
+constexpr int16_t kFractionPad = 3;
+
+fui::TextStyle runStyle(const NoteModel& model) {
+  return plain(model.bindFace != nullptr ? kRunSlot : toybox::kBodyFont);
+}
+
+void bindFace(const fui::DrawTarget& target, const NoteModel& model, const NoteFace face) {
+  if (model.bindFace != nullptr) model.bindFace(target, face);
+}
+
+int16_t faceWidth(const fui::DrawTarget& target, const NoteModel& model, const NoteFace face, const std::string& text) {
+  bindFace(target, model, face);
+  const fui::TextStyle style = runStyle(model);
+  return target.measureText(style.font, text.c_str(), style).width;
+}
+
+int16_t faceHeight(const fui::DrawTarget& target, const NoteModel& model, const NoteFace face) {
+  bindFace(target, model, face);
+  const int16_t height = target.lineHeight(runStyle(model).font);
+  return height > 0 ? height : 1;
+}
+
+NoteFace faceFor(const uint8_t style, const NoteFace base) {
+  if ((style & notes::md::kCode) != 0) return NoteFace::Code;
+  if ((style & notes::md::kMath) != 0) {
+    return (style & (notes::md::kSuper | notes::md::kSub)) != 0 ? NoteFace::MathSmall : NoteFace::Math;
+  }
+  if (base == NoteFace::Heading) return base;
+  if ((style & notes::md::kBold) != 0) return NoteFace::Bold;
+  if ((style & notes::md::kItalic) != 0) return NoteFace::Italic;
+  return base;
+}
+
+// A whole UTF-8 character's length at `at`.
+size_t characterLength(const std::string& text, const size_t at) {
+  size_t next = at + 1;
+  while (next < text.size() && (static_cast<unsigned char>(text[next]) & 0xC0) == 0x80) next++;
+  return next - at;
+}
+
+struct LineBuilder {
+  const fui::DrawTarget& target;
+  const NoteModel& model;
+  NoteFlow& flow;
+  const notes::md::Block& source;
+  int item;
+  NoteFace base;
+  int16_t indent;
+  int16_t lineHeight;
+  bool centre;
+
+  Block current{};
+  int16_t pen = 0;
+  bool hasFraction = false;
+  bool first = true;
+
+  int16_t room() const { return static_cast<int16_t>(flow.textWidth - indent); }
+
+  void finish() {
+    if (current.runs.empty() && !first) return;
+    // A space left at the end of a line is not part of what the line says.
+    if (!current.runs.empty()) {
+      Run& last = current.runs.back();
+      while (!last.text.empty() && last.text.back() == ' ') last.text.pop_back();
+      if (last.text.empty()) current.runs.pop_back();
+    }
+    const int16_t small = faceHeight(target, model, NoteFace::MathSmall);
+    const int16_t tall = static_cast<int16_t>(2 * small + kFractionPad);
+    current.height = hasFraction && tall > lineHeight ? tall : lineHeight;
+    if (hasFraction) {
+      const int16_t offset = static_cast<int16_t>((current.height - lineHeight) / 2);
+      for (Run& run : current.runs) {
+        if (run.y < 1000)
+          run.y = static_cast<int16_t>(run.y + offset);
+        else
+          run.y = static_cast<int16_t>(run.y - 1000);
+      }
+    }
+    const int16_t shift = centre && pen < room() ? static_cast<int16_t>((room() - pen) / 2) : 0;
+    current.indent = static_cast<int16_t>(indent + shift);
+    current.item = item;
+    current.paragraphStart = first;
+    current.quote = source.kind == notes::md::BlockKind::Quote;
+    current.bullet = first && source.kind == notes::md::BlockKind::Bullet;
+    flow.blocks.push_back(std::move(current));
+    current = Block{};
+    pen = 0;
+    hasFraction = false;
+    first = false;
+  }
+
+  void place(const std::string& text, const NoteFace face, const int16_t width, const int16_t y) {
+    if (!current.runs.empty()) {
+      Run& last = current.runs.back();
+      if (last.face == face && last.y == y && last.x + faceWidth(target, model, face, last.text) == pen) {
+        last.text += text;
+        pen = static_cast<int16_t>(pen + width);
+        return;
+      }
+    }
+    Run run;
+    run.text = text;
+    run.face = face;
+    run.x = pen;
+    run.y = y;
+    current.runs.push_back(std::move(run));
+    pen = static_cast<int16_t>(pen + width);
+  }
+
+  // The longest prefix of `text` that fits, by whole characters. A binary search
+  // on bytes, because a pasted run with no spaces can be thousands long.
+  size_t fittingPrefix(const std::string& text, const NoteFace face) const {
+    size_t low = 0;
+    size_t high = text.size();
+    while (low < high) {
+      size_t middle = low + (high - low + 1) / 2;
+      while (middle < text.size() && (static_cast<unsigned char>(text[middle]) & 0xC0) == 0x80) middle++;
+      if (middle >= high) middle = high;
+      if (pen + faceWidth(target, model, face, text.substr(0, middle)) <= room()) {
+        low = middle;
+      } else {
+        size_t lower = middle - 1;
+        while (lower > low && (static_cast<unsigned char>(text[lower]) & 0xC0) == 0x80) lower--;
+        high = lower;
+      }
+    }
+    return low;
+  }
+
+  void word(std::string text, const NoteFace face, const int16_t y, const bool mayBreakBefore) {
+    // A width is int16_t, so a long run must never be measured in one piece.
+    constexpr size_t kLongestMeasured = 256;
+    bool breakable = mayBreakBefore;
+    while (!text.empty()) {
+      size_t chunk = text.size() < kLongestMeasured ? text.size() : kLongestMeasured;
+      while (chunk < text.size() && (static_cast<unsigned char>(text[chunk]) & 0xC0) == 0x80) chunk++;
+      const int16_t width = faceWidth(target, model, face, text.substr(0, chunk));
+      if (chunk == text.size() && pen + width <= room()) {
+        place(text, face, width, y);
+        return;
+      }
+      if (pen > 0 && breakable && width <= room()) {
+        finish();
+        breakable = false;
+        continue;
+      }
+      size_t cut = fittingPrefix(text.substr(0, chunk), face);
+      if (cut == 0) {
+        if (pen > 0) {
+          finish();
+          continue;
+        }
+        cut = characterLength(text, 0);
+      }
+      const std::string head = text.substr(0, cut);
+      place(head, face, faceWidth(target, model, face, head), y);
+      text.erase(0, cut);
+      if (!text.empty()) finish();
+    }
+  }
+
+  void fraction(const notes::md::Span& span) {
+    const int16_t top = faceWidth(target, model, NoteFace::MathSmall, span.text);
+    const int16_t bottom = faceWidth(target, model, NoteFace::MathSmall, span.denominator);
+    const int16_t width = static_cast<int16_t>((top > bottom ? top : bottom) + 4);
+    if (pen > 0 && pen + width > room()) finish();
+    const int16_t small = faceHeight(target, model, NoteFace::MathSmall);
+    Run over;
+    over.text = span.text;
+    over.face = NoteFace::MathSmall;
+    over.x = static_cast<int16_t>(pen + (width - top) / 2);
+    over.y = 1000;
+    Run under;
+    under.text = span.denominator;
+    under.face = NoteFace::MathSmall;
+    under.x = static_cast<int16_t>(pen + (width - bottom) / 2);
+    under.y = static_cast<int16_t>(1000 + small + kFractionPad);
+    current.runs.push_back(std::move(over));
+    current.runs.push_back(std::move(under));
+    Bar bar;
+    bar.x = pen;
+    bar.y = static_cast<int16_t>(small + 1);
+    bar.width = width;
+    current.bars.push_back(bar);
+    pen = static_cast<int16_t>(pen + width);
+    hasFraction = true;
+  }
+
+  void span(const notes::md::Span& item_) {
+    if (item_.isFraction) {
+      fraction(item_);
+      return;
+    }
+    const NoteFace face = faceFor(item_.style, base);
+    int16_t y = 0;
+    // Faces of different sizes share a line by their bottoms.
+    y = static_cast<int16_t>(lineHeight - faceHeight(target, model, face));
+    if ((item_.style & notes::md::kSuper) != 0) y = -2;
+    if ((item_.style & notes::md::kSub) != 0)
+      y = static_cast<int16_t>(lineHeight - faceHeight(target, model, face) + 3);
+    const bool script = (item_.style & (notes::md::kSuper | notes::md::kSub)) != 0;
+    size_t at = 0;
+    while (at < item_.text.size()) {
+      if (item_.text[at] == ' ') {
+        if (pen > 0) {
+          // A space alone measures as nothing, so measure the gap it leaves.
+          const int16_t width =
+              static_cast<int16_t>(faceWidth(target, model, face, "n n") - faceWidth(target, model, face, "nn"));
+          if (pen + width <= room()) place(" ", face, width, y);
+        }
+        at++;
+        continue;
+      }
+      size_t end = item_.text.find(' ', at);
+      if (end == std::string::npos) end = item_.text.size();
+      word(item_.text.substr(at, end - at), face, y, !script);
+      at = end;
+    }
+  }
+};
+
+void flowMarkdown(const fui::DrawTarget& target, const NoteModel& model, NoteFlow& flow) {
+  std::vector<std::string> lines;
+  lines.reserve(static_cast<size_t>(model.count));
+  for (int i = 0; i < model.count; i++) lines.emplace_back(model.tasks[i].text != nullptr ? model.tasks[i].text : "");
+  for (const notes::md::Block& source : notes::md::parse(lines)) {
+    using notes::md::BlockKind;
+    if (source.kind == BlockKind::Rule) {
+      Block rule;
+      rule.item = static_cast<int>(source.line);
+      rule.rule = true;
+      rule.height = kRuleHeight;
+      rule.paragraphStart = true;
+      flow.blocks.push_back(std::move(rule));
+      continue;
+    }
+    NoteFace base = NoteFace::Body;
+    int16_t indent = 0;
+    if (source.kind == BlockKind::Heading) base = source.level <= 2 ? NoteFace::Heading : NoteFace::Bold;
+    if (source.kind == BlockKind::Bullet || source.kind == BlockKind::Numbered) indent = kBulletIndent;
+    if (source.kind == BlockKind::Quote) {
+      indent = kQuoteIndent;
+      base = NoteFace::Italic;
+    }
+    if (source.kind == BlockKind::Code) indent = kCodeIndent;
+    const int16_t height = faceHeight(target, model, base);
+    LineBuilder builder{target,
+                        model,
+                        flow,
+                        source,
+                        static_cast<int>(source.line),
+                        base,
+                        indent,
+                        height > flow.lineHeight ? height : flow.lineHeight,
+                        source.kind == BlockKind::DisplayMath};
+    if (source.kind == BlockKind::Numbered) {
+      Run number;
+      number.text = std::to_string(source.number) + ".";
+      number.face = NoteFace::Body;
+      number.x = static_cast<int16_t>(-kBulletIndent);
+      builder.current.runs.push_back(std::move(number));
+    }
+    for (const notes::md::Span& span : source.spans) builder.span(span);
+    builder.finish();
+  }
 }
 
 NoteFlow flowNote(const fui::DrawTarget& target, const NoteModel& model, const fui::Rect& band) {
@@ -599,20 +893,13 @@ NoteFlow flowNote(const fui::DrawTarget& target, const NoteModel& model, const f
   const int itemCap = usable / flow.lineHeight < 1 ? 1 : usable / flow.lineHeight;
 
   flow.blocks.reserve(static_cast<size_t>(model.count));
+  if (model.page) {
+    flow.lineHeight = faceHeight(target, model, NoteFace::Body);
+    flowMarkdown(target, model, flow);
+    return flow;
+  }
   for (int i = 0; i < model.count; i++) {
     const std::string text = model.tasks[i].text != nullptr ? model.tasks[i].text : "";
-    if (model.page) {
-      const Broken broken = breakWords(target, text, flow.textWidth, 1000, flow.body, true);
-      for (size_t l = 0; l < broken.lines.size(); l++) {
-        Block line;
-        line.item = i;
-        line.lines.push_back(broken.lines[l]);
-        line.height = flow.lineHeight;
-        line.paragraphStart = (l == 0);
-        flow.blocks.push_back(std::move(line));
-      }
-      continue;
-    }
     // A run of letters wider than the row (a pasted link) is split at the
     // body cut. Shrinking the whole list to fit one link was the old answer.
     Broken broken = breakWords(target, text, flow.textWidth, itemCap, flow.body, true);
@@ -696,6 +983,39 @@ NotePlan planNote(const fui::DrawTarget& target, const NoteModel& model, const f
   return plan;
 }
 
+constexpr int kMaxLineHits = 18;
+
+void drawMarkdownBlock(toybox::Screen& screen, const NoteModel& model, const Block& block, const fui::Rect& box) {
+  fui::DrawTarget& target = screen.target();
+  if (block.rule) {
+    target.fill(fui::makeRect(box.x, static_cast<int16_t>(box.y + box.height / 2), box.width, toybox::kHairline),
+                fui::Paint::solid(fui::Color::Black));
+    return;
+  }
+  if (block.quote) {
+    target.fill(fui::makeRect(box.x, box.y, 3, box.height), fui::Paint::solid(fui::Color::Black));
+  }
+  if (block.bullet) {
+    const int16_t side = 6;
+    target.fill(fui::makeRect(static_cast<int16_t>(box.x + 6), static_cast<int16_t>(box.y + (box.height - side) / 2),
+                              side, side),
+                fui::Paint::solid(fui::Color::Black));
+  }
+  const int16_t left = static_cast<int16_t>(box.x + block.indent);
+  fui::TextStyle style = runStyle(model);
+  for (const Run& run : block.runs) {
+    bindFace(target, model, run.face);
+    const int16_t width = static_cast<int16_t>(faceWidth(target, model, run.face, run.text) + 2);
+    const int16_t height = faceHeight(target, model, run.face);
+    target.text(fui::makeRect(static_cast<int16_t>(left + run.x), static_cast<int16_t>(box.y + run.y), width, height),
+                run.text.c_str(), style);
+  }
+  for (const Bar& bar : block.bars) {
+    target.fill(fui::makeRect(static_cast<int16_t>(left + bar.x), static_cast<int16_t>(box.y + bar.y), bar.width, 1),
+                fui::Paint::solid(fui::Color::Black));
+  }
+}
+
 void noteRows(toybox::Screen& screen, const NoteModel& model, const fui::Rect& band, const NotePlan& plan) {
   if (model.count == 0) {
     centredNotice(screen, band, model.page ? "This note is empty. Tap ADD." : "Nothing on this list. Tap ADD.");
@@ -720,12 +1040,35 @@ void noteRows(toybox::Screen& screen, const NoteModel& model, const fui::Rect& b
     if (share > 0) grow = static_cast<int16_t>(share < kGrowCap ? share : kGrowCap);
   }
 
+  int hitItem = -1;
+  int hits = 0;
+  int16_t hitTop = 0;
+  int16_t hitBottom = 0;
+  const auto flushHit = [&] {
+    if (hitItem >= 0 && hits < kMaxLineHits) {
+      rowHit(screen, fui::makeRect(band.x, hitTop, band.width, static_cast<int16_t>(hitBottom - hitTop)),
+             ActionEditLine, hitItem);
+      hits++;
+    }
+    hitItem = -1;
+  };
+
   int16_t y = band.y;
   for (int i = begin; i < end; i++) {
     const Block& block = flow.blocks[i];
     if (model.page) {
       if (block.paragraphStart && y > band.y) y = static_cast<int16_t>(y + kParaGap);
-      drawLines(screen, fui::makeRect(band.x, y, flow.textWidth, flow.lineHeight), block.lines, flow.body, false);
+      drawMarkdownBlock(screen, model, block, fui::makeRect(band.x, y, flow.textWidth, block.height));
+      // One tap target per source line. The interaction table is small, so a
+      // wrapped paragraph takes one slot however many rows it covers.
+      if (!model.asleep) {
+        if (block.item != hitItem) {
+          flushHit();
+          hitItem = block.item;
+          hitTop = y;
+        }
+        hitBottom = static_cast<int16_t>(y + block.height);
+      }
       y = static_cast<int16_t>(y + block.height);
       continue;
     }
@@ -743,6 +1086,7 @@ void noteRows(toybox::Screen& screen, const NoteModel& model, const fui::Rect& b
     if (!model.asleep) rowHit(screen, row, ActionToggleTask, block.item);
     y = static_cast<int16_t>(y + row.height);
   }
+  flushHit();
 }
 
 }  // namespace
