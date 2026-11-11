@@ -4,7 +4,8 @@
 
 #include "activities/UiListActivity.h"
 
-enum class NetworkMode { JOIN_NETWORK, CONNECT_CALIBRE, CREATE_HOTSPOT, USB_DRIVE };
+// The order matches the menu rows: a row's index is cast to this.
+enum class NetworkMode { JOIN_NETWORK, CONNECT_CALIBRE, CREATE_HOTSPOT, GUEST_SHARE, USB_DRIVE };
 
 /**
  * NetworkModeSelectionActivity presents the user with a choice:
@@ -22,9 +23,9 @@ class NetworkModeSelectionActivity final : public UiListActivity {
   explicit NetworkModeSelectionActivity(GfxRenderer& renderer, MappedInputManager& mappedInput);
 
 #if FREEINK_CAP_USB_MSC
-  static constexpr int MENU_ITEM_COUNT = 4;
+  static constexpr int MENU_ITEM_COUNT = 5;
 #else
-  static constexpr int MENU_ITEM_COUNT = 3;
+  static constexpr int MENU_ITEM_COUNT = 4;
 #endif
 
   void onModeSelected(NetworkMode mode);

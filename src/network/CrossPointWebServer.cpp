@@ -41,6 +41,7 @@
 #include "DevSerialBridge.h"
 #include "FirmwareFlasher.h"
 #include "FontInstaller.h"
+#include "GuestShareCore.h"
 #include "OpdsServerStore.h"
 #include "ProtectedPaths.h"
 #include "SdCardFontSystem.h"
@@ -51,6 +52,7 @@
 #include "apps_local/wallpapers/WallpapersCore.h"
 #include "html/FilesPageHtml.generated.h"
 #include "html/FontsPageHtml.generated.h"
+#include "html/GuestSharePageHtml.generated.h"
 #include "html/HomePageHtml.generated.h"
 #include "html/NotesPageHtml.generated.h"
 #include "html/RunnerPageHtml.generated.h"
@@ -284,6 +286,12 @@ void CrossPointWebServer::begin() {
     server->on("/api/wifi", HTTP_POST, [this] { handlePostWifiNetwork(); });
     server->on("/api/wifi/delete", HTTP_POST, [this] { handleDeleteWifiNetwork(); });
   }  // isFull()
+
+  if (isGuest()) {
+    server->on("/", HTTP_GET, [this] { handleGuestPage(); });
+    server->on("/api/share", HTTP_GET, [this] { handleGuestList(); });
+    server->on("/share/download", HTTP_GET, [this] { handleGuestDownload(); });
+  }
 
   if (isWallpapers()) {
     server->on("/w", HTTP_GET, [this] { handleWallpaperPage(); });
@@ -737,6 +745,43 @@ void CrossPointWebServer::handleFileListData() const {
   if (server->hasArg("path")) {
     currentPath = normalizeWebPath(server->arg("path"));
   }
+  streamFileList(currentPath, false);
+}
+
+void CrossPointWebServer::handleGuestPage() const {
+  sendStaticContent(server.get(), GuestSharePageHtml, sizeof(GuestSharePageHtml), GuestSharePageHtmlETag, "text/html");
+}
+
+namespace {
+// The raw argument is judged as well as the normalised path, so a request that
+// only reaches /share by being tidied up is still refused.
+bool guestMayName(const String& raw, const String& normalized) {
+  return guestshare::isSharedPath(raw.c_str()) && guestshare::isSharedPath(normalized.c_str()) &&
+         !protectedpaths::isSensitivePath(normalized.c_str());
+}
+}  // namespace
+
+void CrossPointWebServer::handleGuestList() const {
+  const String raw = server->hasArg("path") ? server->arg("path") : String(guestshare::kShareRoot);
+  const String path = normalizeWebPath(raw);
+  if (!guestMayName(raw, path)) {
+    server->send(403, "text/plain", "Not shared");
+    return;
+  }
+  streamFileList(path, true);
+}
+
+void CrossPointWebServer::handleGuestDownload() const {
+  const String raw = server->arg("path");
+  if (!guestMayName(raw, normalizeWebPath(raw))) {
+    server->send(403, "text/plain", "Not shared");
+    return;
+  }
+  handleDownload();
+}
+
+void CrossPointWebServer::streamFileList(const String& path, const bool neverShowHidden) const {
+  const String& currentPath = path;
 
   server->setContentLength(CONTENT_LENGTH_UNKNOWN);
   server->send(200, "application/json", "");
@@ -746,7 +791,8 @@ void CrossPointWebServer::handleFileListData() const {
   bool seenFirst = false;
   JsonDocument doc;
 
-  scanFiles(currentPath.c_str(), [this, &output, &doc, seenFirst](const FileInfo& info) mutable {
+  scanFiles(currentPath.c_str(), [this, &output, &doc, seenFirst, neverShowHidden](const FileInfo& info) mutable {
+    if (neverShowHidden && info.name.startsWith(".")) return;
     doc.clear();
     doc["name"] = info.name;
     doc["size"] = info.size;
