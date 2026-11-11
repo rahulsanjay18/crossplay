@@ -8,6 +8,7 @@
 
 #include <cstdio>
 #include <cstring>
+#include <string>
 
 #include "../../src/apps_local/chess/ChessCore.h"
 #include "../../src/apps_local/chess/ChessEngine.h"
@@ -666,6 +667,66 @@ void testCaptureEndsTheRepetitionWindow() {
 
 }  // namespace
 
+void testLevels() {
+  // Files written when there were three levels keep meaning what they meant.
+  CHECK(std::string(chess::kLevels[chess::levelFromStored(0)].name) == "EASY");
+  CHECK(std::string(chess::kLevels[chess::levelFromStored(1)].name) == "NORMAL");
+  CHECK(std::string(chess::kLevels[chess::levelFromStored(2)].name) == "HARD");
+  CHECK(chess::levelFromStored(-1) == chess::kDefaultLevel);
+  for (int level = 0; level < chess::kLevelCount; ++level) {
+    CHECK(chess::levelFromStored(chess::kStoredLevelBase + level) == level);
+  }
+
+  static chess::SearchBuffers buffers;
+  const char* const fens[] = {"rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+                              "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1"};
+  for (const char* const fen : fens) {
+    // The three original levels play exactly what they always played.
+    for (const int level : {1, 6, 7}) {
+      chess::Position a;
+      chess::Position b;
+      chess::parseFen(fen, a);
+      chess::parseFen(fen, b);
+      const chess::PlayStyle& style = chess::kLevels[level];
+      const chess::SearchResult plain = chess::search(a, style.depth, buffers, style.nodeBudget);
+      const chess::SearchResult styled = chess::searchStyled(b, style, buffers, 1234);
+      CHECK(plain.best.from == styled.best.from && plain.best.to == styled.best.to && plain.score == styled.score);
+    }
+    for (int level = 0; level < chess::kLevelCount; ++level) {
+      chess::Position position;
+      chess::parseFen(fen, position);
+      const std::string before = [&] {
+        char out[100];
+        chess::positionToFen(position, out);
+        return std::string(out);
+      }();
+      chess::MoveList legal;
+      chess::generateLegalMoves(position, legal);
+      for (uint32_t seed = 1; seed <= 4; ++seed) {
+        const chess::SearchResult result = chess::searchStyled(position, chess::kLevels[level], buffers, seed);
+        bool found = false;
+        for (int i = 0; i < legal.count; ++i) {
+          found = found || (legal.moves[i].from == result.best.from && legal.moves[i].to == result.best.to);
+        }
+        CHECK(result.hasMove && found);
+        const chess::SearchResult again = chess::searchStyled(position, chess::kLevels[level], buffers, seed);
+        CHECK(again.best.from == result.best.from && again.best.to == result.best.to);
+      }
+      char after[100];
+      chess::positionToFen(position, after);
+      CHECK(before == after);
+    }
+  }
+
+  // Mate in one is taken even by a level that is allowed to slip.
+  chess::Position mate;
+  chess::parseFen("6k1/5ppp/8/8/8/8/5PPP/R5K1 w - - 0 1", mate);
+  for (uint32_t seed = 1; seed <= 20; ++seed) {
+    const chess::SearchResult result = chess::searchStyled(mate, chess::kLevels[2], buffers, seed);
+    CHECK(result.best.to == 56);
+  }
+}
+
 int main() {
   testFenRoundTrip();
   testFenRoundTrip2();
@@ -689,6 +750,7 @@ int main() {
   testRepetitionCountWindow();
   testThreefoldFromKnightShuffle();
   testCaptureEndsTheRepetitionWindow();
+  testLevels();
 
   std::printf("%d checks, %d failed\n", checksRun, checksFailed);
   return checksFailed == 0 ? 0 : 1;

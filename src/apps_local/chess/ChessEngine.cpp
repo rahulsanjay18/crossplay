@@ -137,7 +137,41 @@ struct SearchContext {
   uint32_t nodes;
   uint32_t nodeBudget;
   bool budgetExhausted;
+  bool quiescence;
 };
+
+int quiesce(Position& position, int alpha, const int beta, const int ply, const int extra, SearchContext& context) {
+  const int standPat = evaluate(position);
+  if (context.nodeBudget != 0 && context.nodes >= context.nodeBudget) {
+    context.budgetExhausted = true;
+    return standPat;
+  }
+  ++context.nodes;
+  if (extra >= kMaxQuiescence || standPat >= beta) return standPat;
+  if (standPat > alpha) alpha = standPat;
+
+  MoveList& list = context.buffers->plies[ply];
+  generateLegalMoves(position, list);
+  int kept = 0;
+  for (int i = 0; i < list.count; ++i) {
+    if ((list.moves[i].flags & (FlagCapture | FlagPromotion)) != 0) list.moves[kept++] = list.moves[i];
+  }
+  list.count = kept;
+
+  int best = standPat;
+  for (int i = 0; i < kept; ++i) {
+    pickBestMoveTo(position, list, i);
+    const Move move = list.moves[i];
+    Undo undo;
+    makeMove(position, move, undo);
+    const int score = -quiesce(position, -beta, -alpha, ply + 1, extra + 1, context);
+    unmakeMove(position, move, undo);
+    if (score > best) best = score;
+    if (best > alpha) alpha = best;
+    if (alpha >= beta || context.budgetExhausted) break;
+  }
+  return best;
+}
 
 int negamax(Position& position, const int depth, int alpha, const int beta, const int ply, SearchContext& context) {
   if (context.nodeBudget != 0 && context.nodes >= context.nodeBudget) {
@@ -146,7 +180,11 @@ int negamax(Position& position, const int depth, int alpha, const int beta, cons
   }
   ++context.nodes;
 
-  if (depth <= 0) return evaluate(position);
+  if (depth <= 0) {
+    if (!context.quiescence) return evaluate(position);
+    --context.nodes;  // quiesce counts this node itself
+    return quiesce(position, alpha, beta, ply, 0, context);
+  }
 
   MoveList& list = context.buffers->plies[ply];
   generateLegalMoves(position, list);
@@ -195,7 +233,10 @@ int evaluate(const Position& position) {
   return position.whiteToMove ? score : -score;
 }
 
-SearchResult search(Position& position, int depth, SearchBuffers& buffers, const uint32_t nodeBudget) {
+namespace {
+
+SearchResult searchBest(Position& position, int depth, SearchBuffers& buffers, const uint32_t nodeBudget,
+                        const bool quiescence) {
   SearchResult result{};
   if (depth < 1) depth = 1;
   if (depth > kMaxSearchDepth) depth = kMaxSearchDepth;
@@ -204,7 +245,7 @@ SearchResult search(Position& position, int depth, SearchBuffers& buffers, const
   generateLegalMoves(position, root);
   if (root.count == 0) return result;
 
-  SearchContext context{&buffers, 0, nodeBudget, false};
+  SearchContext context{&buffers, 0, nodeBudget, false, quiescence};
   int alpha = -kMateScore * 2;
   const int beta = kMateScore * 2;
   const int count = root.count;
@@ -226,6 +267,75 @@ SearchResult search(Position& position, int depth, SearchBuffers& buffers, const
     if (context.budgetExhausted) break;
   }
 
+  result.nodes = context.nodes;
+  result.budgetExhausted = context.budgetExhausted;
+  return result;
+}
+
+uint32_t nextRandom(uint32_t& state) {
+  state ^= state << 13;
+  state ^= state >> 17;
+  state ^= state << 5;
+  return state;
+}
+
+}  // namespace
+
+SearchResult search(Position& position, const int depth, SearchBuffers& buffers, const uint32_t nodeBudget) {
+  return searchBest(position, depth, buffers, nodeBudget, false);
+}
+
+SearchResult searchStyled(Position& position, const PlayStyle& style, SearchBuffers& buffers, const uint32_t seed) {
+  if (style.marginCp == 0) return searchBest(position, style.depth, buffers, style.nodeBudget, style.quiescence);
+
+  SearchResult result{};
+  MoveList& root = buffers.plies[0];
+  generateLegalMoves(position, root);
+  if (root.count == 0) return result;
+
+  uint32_t random = seed != 0 ? seed : 0x9E3779B9u;
+  const int margin = nextRandom(random) % 100 < style.lapsePercent ? style.marginCp * 3 : style.marginCp;
+
+  SearchContext context{&buffers, 0, style.nodeBudget, false, style.quiescence};
+  const int beta = kMateScore * 2;
+  int best = -kMateScore * 2;
+  int searched = 0;
+  for (int i = 0; i < root.count; ++i) {
+    pickBestMoveTo(position, root, i);
+    const Move move = root.moves[i];
+    Undo undo;
+    makeMove(position, move, undo);
+    // One below the margin, so every move that could be chosen has an exact score.
+    const int alpha = best - margin - 1;
+    const int score = -negamax(position, style.depth - 1, -beta, -alpha, 1, context);
+    unmakeMove(position, move, undo);
+    buffers.rootScores[i] = score;
+    searched = i + 1;
+    if (score > best) best = score;
+    if (context.budgetExhausted) break;
+  }
+
+  // A forced mate against the mover is never an acceptable slip.
+  const auto acceptable = [&](const int score) {
+    return score >= best - margin && (score > -kMateThreshold || best <= -kMateThreshold);
+  };
+  uint32_t totalWeight = 0;
+  for (int i = 0; i < searched; ++i) {
+    if (acceptable(buffers.rootScores[i]))
+      totalWeight += static_cast<uint32_t>(margin - (best - buffers.rootScores[i]) + 1);
+  }
+  uint32_t pick = nextRandom(random) % totalWeight;
+  for (int i = 0; i < searched; ++i) {
+    if (!acceptable(buffers.rootScores[i])) continue;
+    const uint32_t weight = static_cast<uint32_t>(margin - (best - buffers.rootScores[i]) + 1);
+    if (pick < weight) {
+      result.best = root.moves[i];
+      result.score = buffers.rootScores[i];
+      break;
+    }
+    pick -= weight;
+  }
+  result.hasMove = true;
   result.nodes = context.nodes;
   result.budgetExhausted = context.budgetExhausted;
   return result;

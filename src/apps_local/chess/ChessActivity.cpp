@@ -374,8 +374,8 @@ void ChessActivity::saveSettings() const {
   constexpr int kSettingsLineChars = toybox::kIntChars + toybox::kIntChars + toybox::kIntChars + toybox::kIntChars +
                                      toybox::kIntChars + toybox::literalChars("    \n") + 1;
   char line[kSettingsLineChars];
-  snprintf(line, sizeof(line), "%d %d %d %d %d\n", kSaveVersion, static_cast<int>(level), humanPlaysWhite ? 1 : 0,
-           showHints ? 1 : 0, static_cast<int>(opponent));
+  snprintf(line, sizeof(line), "%d %d %d %d %d\n", kSaveVersion, chess::kStoredLevelBase + static_cast<int>(level),
+           humanPlaysWhite ? 1 : 0, showHints ? 1 : 0, static_cast<int>(opponent));
   Storage.writeFile(kSettingsPath, String(line));
 }
 
@@ -384,7 +384,7 @@ void ChessActivity::loadSettings() {
   char buffer[48] = {};
   if (Storage.readFileToBuffer(kSettingsPath, buffer, sizeof(buffer)) == 0) return;
   int version = 0;
-  int storedLevel = 1;
+  int storedLevel = -1;
   int white = 1;
   int hints = 1;
   int computer = 1;
@@ -393,7 +393,7 @@ void ChessActivity::loadSettings() {
   const int fields = sscanf(buffer, "%d %d %d %d %d", &version, &storedLevel, &white, &hints, &computer);
   if (fields < 4) return;
   if (version != kSaveVersion) return;
-  level = static_cast<uint8_t>(storedLevel < 0 || storedLevel > 2 ? 1 : storedLevel);
+  level = static_cast<uint8_t>(chess::levelFromStored(storedLevel));
   humanPlaysWhite = white != 0;
   showHints = hints != 0;
   // Files written while NEARBY was briefly a saved value read back as COMPUTER,
@@ -721,11 +721,9 @@ void ChessActivity::handleSquareActivated(const int square) {
 
 void ChessActivity::playEngineMove() {
   engineThinking = false;
-  // Depth 3 with a node cap. The cap is the safety net: if a position blows up
-  // combinatorially the search stops early and still returns its best move so
-  // far, rather than stalling the loop and tripping the watchdog.
-  static constexpr int kDepthForLevel[3] = {1, 3, 4};
-  constexpr uint32_t kNodeBudget = 60000;
+  // Each level carries a node cap. The cap is the safety net: if a position
+  // blows up combinatorially the search stops early and still returns its best
+  // move so far, rather than stalling the loop and tripping the watchdog.
   // A COPY, and this is the whole of the flicker fix. search() makes and
   // unmakes thousands of moves on whatever position it is handed, and the
   // render task reads `position` straight out of this object while the main
@@ -738,7 +736,7 @@ void ChessActivity::playEngineMove() {
   // task. The repaint it asks for is still in flight when the search starts,
   // so deferring by a pass moved the race rather than closing it.
   chess::Position scratch = position;
-  const chess::SearchResult result = chess::search(scratch, kDepthForLevel[level], searchBuffers, kNodeBudget);
+  const chess::SearchResult result = chess::searchStyled(scratch, chess::kLevels[level], searchBuffers, micros());
   LOG_DBG("CHESS", "engine: %u nodes, score %d%s", static_cast<unsigned>(result.nodes), result.score,
           result.budgetExhausted ? " (budget hit)" : "");
   if (!result.hasMove) {
@@ -1019,7 +1017,7 @@ void ChessActivity::activateMenuRow(const MenuRow row) {
       takeBack();
       return;
     case MenuRow::Level:
-      level = static_cast<uint8_t>((level + 1) % 3);
+      level = static_cast<uint8_t>((level + 1) % chess::kLevelCount);
       break;
     case MenuRow::PlayAs:
       // Edited in place. Closing the overlay is what starts the new game, and

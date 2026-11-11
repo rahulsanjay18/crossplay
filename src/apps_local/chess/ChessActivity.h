@@ -248,7 +248,7 @@ class ChessActivity final : public linkplay::LinkActivity {
   chessui::Opponent startedOpponent = chessui::Opponent::Computer;
   bool startedHumanWhite = true;
   // 0 easy, 1 normal, 2 hard. Maps to search depth in playEngineMove().
-  uint8_t level = 1;
+  uint8_t level = chess::kDefaultLevel;
   bool humanPlaysWhite = true;
   bool showHints = true;
   chessui::Opponent opponent = chessui::Opponent::Computer;
