@@ -22,6 +22,7 @@
 #include "../ui/ToyboxIcons.h"
 #include "../ui/ToyboxTheme.h"
 #include "NotesCore.h"
+#include "NotesFaces.h"
 #include "NotesSleep.h"
 
 namespace fui = freeink::ui;
@@ -32,6 +33,7 @@ namespace {
 // maxLength counts BYTES, which is what this is.
 constexpr size_t kNameMax = 64;
 constexpr size_t kLineMax = 200;
+constexpr size_t kEditMax = 1000;
 
 }  // namespace
 
@@ -115,6 +117,7 @@ int NotesActivity::deckPageSize() {
 
 notesui::NoteModel NotesActivity::noteModel() const {
   notesui::NoteModel model;
+  model.bindFace = notesui::bindNoteFace;
   model.title = openName_.c_str();
   model.tasks = taskRows_.data();
   model.count = static_cast<int>(taskRows_.size());
@@ -469,6 +472,47 @@ void NotesActivity::askNewName() {
   });
 }
 
+void NotesActivity::askEditLine(const int row) {
+  if (row < 0 || static_cast<size_t>(row) >= rowLine_.size()) return;
+  const notes::Line line = lines_[rowLine_[static_cast<size_t>(row)]];
+  auto keyboard = makeUniqueNoThrow<KeyboardEntryActivity>(renderer, mappedInput, "EDIT LINE",
+                                                           doc_.substr(line.begin, line.end - line.begin), kEditMax,
+                                                           InputType::Markdown);
+  if (!keyboard) {
+    showNotice("There was not enough memory to open the keyboard.");
+    return;
+  }
+  startActivityForResult(std::move(keyboard), [this, line](const ActivityResult& result) {
+    interactionsReady_ = false;
+    if (result.isCancelled) {
+      view_ = View::Note;
+      requestUpdate();
+      return;
+    }
+    const auto& entered = std::get<KeyboardResult>(result.data);
+    const std::string before = doc_;
+    if (entered.text.empty()) {
+      // The whole line goes, newline included, so no blank is left behind.
+      size_t end = line.end;
+      if (end < doc_.size() && doc_[end] == '\n') end++;
+      doc_.erase(line.begin, end - line.begin);
+    } else {
+      doc_.replace(line.begin, line.end - line.begin, entered.text);
+    }
+    std::string message;
+    if (!library_.save(openName_, doc_, message)) {
+      doc_ = before;
+      lines_ = notes::parse(doc_);
+      rebuildRows();
+      showNotice(message);
+      return;
+    }
+    refreshFromDoc();
+    view_ = View::Note;
+    requestUpdate();
+  });
+}
+
 void NotesActivity::askRename() {
   auto keyboard = makeUniqueNoThrow<KeyboardEntryActivity>(renderer, mappedInput, "RENAME", openName_, kNameMax);
   if (!keyboard) {
@@ -507,7 +551,8 @@ void NotesActivity::askLine() {
   // many are on the list, so every OK visibly moves a number.
   char title[80];
   std::snprintf(title, sizeof(title), "%s  %d", openName_.c_str(), static_cast<int>(taskRows_.size()));
-  auto keyboard = makeUniqueNoThrow<KeyboardEntryActivity>(renderer, mappedInput, title, "", kLineMax);
+  auto keyboard = makeUniqueNoThrow<KeyboardEntryActivity>(renderer, mappedInput, title, "", kLineMax,
+                                                           openIsPage() ? InputType::Markdown : InputType::Text);
   if (!keyboard) {
     showNotice("There was not enough memory to open the keyboard.");
     return;
@@ -783,6 +828,9 @@ void NotesActivity::loop() {
       return;
     case notesui::ActionAddLine:
       askLine();
+      return;
+    case notesui::ActionEditLine:
+      askEditLine(action.value);
       return;
     case notesui::ActionMenu:
       if (openName_.empty()) return;

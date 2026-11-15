@@ -8,6 +8,11 @@
 #include "fonts/instrument_10.h"
 #include "fonts/instrument_13.h"
 #include "fonts/instrument_24.h"
+#include "fonts/notes_bold_14.h"
+#include "fonts/notes_code_12.h"
+#include "fonts/notes_italic_14.h"
+#include "fonts/notes_math_10.h"
+#include "fonts/notes_math_14.h"
 #include "fonts/reading_serif_11.h"
 #include "fonts/reading_serif_14.h"
 #include "fonts/reading_serif_bold_12.h"
@@ -54,6 +59,11 @@ EpdFont reading11(&reading_serif_11);
 EpdFont reading14(&reading_serif_14);
 EpdFont readingBold12(&reading_serif_bold_12);
 EpdFont readingBold16(&reading_serif_bold_16);
+EpdFont notesBold(&notes_bold_14);
+EpdFont notesItalic(&notes_italic_14);
+EpdFont notesCode(&notes_code_12);
+EpdFont notesMath(&notes_math_14);
+EpdFont notesMathSmall(&notes_math_10);
 EpdFont instrument10(&instrument_10);
 EpdFont instrument13(&instrument_13);
 EpdFont instrument24(&instrument_24);
@@ -67,6 +77,11 @@ EpdFontFamily readingSmallFamily(&reading11);
 EpdFontFamily readingFamily(&reading14);
 EpdFontFamily readingBoldSmallFamily(&readingBold12);
 EpdFontFamily readingBoldFamily(&readingBold16);
+EpdFontFamily notesBoldFamily(&notesBold);
+EpdFontFamily notesItalicFamily(&notesItalic);
+EpdFontFamily notesCodeFamily(&notesCode);
+EpdFontFamily notesMathFamily(&notesMath);
+EpdFontFamily notesMathSmallFamily(&notesMathSmall);
 EpdFontFamily serifTileFamily(&instrument13);
 EpdFontFamily serifSmallFamily(&instrument10);
 EpdFontFamily serifTitleFamily(&instrument24);
@@ -175,6 +190,11 @@ void ensureFonts(GfxRenderer& renderer) {
   renderer.insertFont(kSerifTileFontId, serifTileFamily);
   renderer.insertFont(kSerifSmallFontId, serifSmallFamily);
   renderer.insertFont(kSerifTitleFontId, serifTitleFamily);
+  renderer.insertFont(kNotesBoldFontId, notesBoldFamily);
+  renderer.insertFont(kNotesItalicFontId, notesItalicFamily);
+  renderer.insertFont(kNotesCodeFontId, notesCodeFamily);
+  renderer.insertFont(kNotesMathFontId, notesMathFamily);
+  renderer.insertFont(kNotesMathSmallFontId, notesMathSmallFamily);
   registered = true;
 }
 

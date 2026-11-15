@@ -7,6 +7,7 @@
 #include "NetworkModeSelectionActivity.h"
 #include "activities/Activity.h"
 #include "network/CrossPointWebServer.h"
+#include "network/GuestShareCore.h"
 
 // Web server activity states
 enum class WebServerActivityState {
@@ -33,6 +34,7 @@ class CrossPointWebServerActivity final : public Activity {
   // Network mode
   NetworkMode networkMode = NetworkMode::JOIN_NETWORK;
   bool isApMode = false;
+  char apPassword[guestshare::kPasswordLength + 1] = {};
   // Set when re-entered after the heap-defrag reboot: skip mode selection, go
   // straight to Join Network, and don't reboot again.
   bool startInJoinNetwork = false;

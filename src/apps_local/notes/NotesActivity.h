@@ -71,6 +71,7 @@ class NotesActivity final : public Activity {
   // computed against a screen nobody ever saw.
   notesui::NoteModel noteModel() const;
   void askRename();
+  void askEditLine(int row);
   void askLine();
   void showNotice(const std::string& text);
   void startPhone();

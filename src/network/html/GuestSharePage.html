@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Shared files</title>
+<style>
+body { font: 16px/1.4 system-ui, sans-serif; margin: 0 auto; max-width: 40rem; padding: 1rem; }
+ul { list-style: none; margin: 0; padding: 0; }
+li { align-items: baseline; border-bottom: 1px solid #ccc; display: flex; gap: 1rem; justify-content: space-between; padding: .75rem 0; }
+a { overflow-wrap: anywhere; }
+small { white-space: nowrap; }
+</style>
+</head>
+<body>
+<h1>Shared files</h1>
+<p id="where"></p>
+<ul id="list"></ul>
+<p id="note"></p>
+<script>
+const root = '/share';
+const listEl = document.getElementById('list');
+const noteEl = document.getElementById('note');
+function size(n) {
+  if (n < 1024) return n + ' B';
+  if (n < 1048576) return (n / 1024).toFixed(1) + ' KB';
+  if (n < 1073741824) return (n / 1048576).toFixed(1) + ' MB';
+  return (n / 1073741824).toFixed(1) + ' GB';
+}
+function row(label, href, onOpen, detail) {
+  const li = document.createElement('li');
+  const a = document.createElement('a');
+  a.textContent = label;
+  a.href = href;
+  if (onOpen) a.onclick = e => { e.preventDefault(); onOpen(); };
+  li.appendChild(a);
+  if (detail) {
+    const s = document.createElement('small');
+    s.textContent = detail;
+    li.appendChild(s);
+  }
+  listEl.appendChild(li);
+}
+async function open(path) {
+  listEl.textContent = '';
+  noteEl.textContent = '';
+  document.getElementById('where').textContent = path.slice(root.length) || '/';
+  let entries;
+  try {
+    const reply = await fetch('/api/share?path=' + encodeURIComponent(path));
+    if (!reply.ok) throw new Error();
+    entries = await reply.json();
+  } catch (e) {
+    noteEl.textContent = 'Could not load this folder.';
+    return;
+  }
+  if (path !== root) row('Back', '#', () => open(path.slice(0, path.lastIndexOf('/'))));
+  entries.sort((a, b) => b.isDirectory - a.isDirectory || a.name.localeCompare(b.name));
+  for (const entry of entries) {
+    const full = path + '/' + entry.name;
+    if (entry.isDirectory) row(entry.name + '/', '#', () => open(full));
+    else row(entry.name, '/share/download?path=' + encodeURIComponent(full), null, size(entry.size));
+  }
+  if (!entries.length) noteEl.textContent = 'Nothing is shared here yet.';
+}
+open(root);
+</script>
+</body>
+</html>
