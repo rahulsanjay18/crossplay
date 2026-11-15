@@ -59,3 +59,34 @@ A Music Server Playlist the listener declined to copy because some of its Tracks
 
 **Finished Audiobook**:
 An Audiobook played to its end, which has no Book Position and starts from the beginning when next opened.
+
+### Songs
+
+**Chart**:
+One song's chords and lyrics, as a text or ChordPro file in the songs folder.
+_Avoid_: Tab, song file
+
+**Chord Line**:
+A line of a chart holding only chords, read as sitting over the lyric line below it.
+
+**Shape**:
+The chord as fingered, which with a capo differs from the chord that sounds.
+_Avoid_: Fingering
+
+**Chart Capo**:
+The capo a chart was written for, where it opens.
+
+**Capo**:
+Where the player's capo is now, which changes the Shapes shown but not the sound.
+
+**Transpose**:
+Moving the whole song up or down by semitones, which changes the sound.
+_Avoid_: Key change
+
+**Setlist**:
+A named, ordered list of Charts played through in turn.
+_Avoid_: Playlist (which belongs to Music)
+
+**Score**:
+One piece of sheet music, kept as a folder of page images.
+_Avoid_: Sheet, PDF
