@@ -26,7 +26,7 @@ devices with an 800x480 panel, capacitive touch and two physical buttons
 (three on the Sticky; the design uses the two shared buttons), and
 [CrossPoint](https://crosspointreader.com/) already makes them good at reading.
 CrossPlay is firmware that keeps all of that and adds the other things a screen
-that holds still is good at: **27 games and 8 apps**,
+that holds still is good at: **27 games and 9 apps**,
 spaced-repetition flashcards, comics, a read-later queue, and two devices that
 play together with nothing to set up.
 
@@ -90,6 +90,7 @@ the import lands a real pack instead of failing on an unreachable host.
 | **Wikipedia**   | Fifty thousand articles on the card, read like a book, no internet.      |
 | **Calculator**  | A calculator with keys the size of a thumb, and the sums you already did. |
 | **Notes**       | Lists you tick with one hand, kept as plain text files on the card.      |
+| **Songs**       | Chord charts from the card, transposed to any key, with setlists.        |
 
 Don't want all of them? Tap GAMES or APPS at the top of the list on your device and
 untick what you don't play.

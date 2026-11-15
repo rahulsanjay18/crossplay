@@ -36,6 +36,7 @@
 #include "seasalt/SeaSaltActivity.h"
 #include "shogi/ShogiActivity.h"
 #include "solitaire/SolitaireActivity.h"
+#include "songs/SongsActivity.h"
 #include "study/StudyActivity.h"
 #include "sudoku/SudokuActivity.h"
 #include "toybattle/ToyBattleActivity.h"
@@ -92,6 +93,7 @@ constexpr shelf::Item kApps[] = {
     {"WALLPAPERS", &icon_wallpapers_32, &WallpapersActivity::create},
     {"WIKIPEDIA", &icon_wikipedia_32, &WikipediaActivity::create},
     {"CALCULATOR", &icon_calculator_32, &CalculatorActivity::create},
+    {"SONGS", &icon_cat_music_32, &SongsActivity::create},
     // Card #516. The icon is the Lucide list mark borrowed from Murdle while
     // the screens are being chosen; a Notes mark comes with the real app.
     {"NOTES", &icon_murdle_face_clues_32, &NotesActivity::create},
