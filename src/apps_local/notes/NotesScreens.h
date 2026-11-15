@@ -59,6 +59,7 @@ enum : fui::ActionId {
   ActionSwitchKind = 352,
   ActionShowAsleep = 353,
   ActionDismiss = 349,
+  ActionEditLine = 354,
 };
 
 // --- The deck ------------------------------------------------------------
@@ -102,8 +103,16 @@ struct Task {
   bool checked = false;
 };
 
+// The faces a Markdown note sets. Only the Activity knows the fonts, and the UI
+// layer has three bound slots and one spare, so each run binds its face to the
+// spare just before it is measured or drawn.
+enum class NoteFace : uint8_t { Body, Bold, Italic, Code, Math, MathSmall, Heading };
+using BindNoteFace = void (*)(const fui::DrawTarget& target, NoteFace face);
+
 struct NoteModel {
   const char* title = "";
+  // Null on the host, where every run measures in the body slot.
+  BindNoteFace bindFace = nullptr;
   // A page is the same rows without tick boxes: text you keep, not things to
   // do. The kind belongs to the note, so one flag decides the whole screen and
   // no line can disagree with its neighbours.

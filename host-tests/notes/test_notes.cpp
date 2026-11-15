@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "NotesCore.h"
+#include "NotesMarkdown.h"
 
 using namespace notes;
 
@@ -302,7 +303,95 @@ void testAsleepChoice() {
 
 }  // namespace
 
+namespace md = notes::md;
+
+std::string spansText(const std::vector<md::Span>& spans) {
+  std::string out;
+  for (const md::Span& span : spans)
+    out += span.isFraction ? "[" + span.text + "|" + span.denominator + "]" : span.text;
+  return out;
+}
+
+void testInlineMarkdown() {
+  auto spans = md::parseInline("a **b** *c* `d`");
+  CHECK(spans.size() == 6);
+  CHECK(spans[1].text == "b" && spans[1].style == md::kBold);
+  CHECK(spans[3].text == "c" && spans[3].style == md::kItalic);
+  CHECK(spans[5].text == "d" && spans[5].style == md::kCode);
+
+  // Nothing unmatched disappears.
+  CHECK(spansText(md::parseInline("2 * 3 * 4")) == "2 * 3 * 4");
+  CHECK(spansText(md::parseInline("**open")) == "**open");
+  CHECK(spansText(md::parseInline("`open")) == "`open");
+  CHECK(spansText(md::parseInline("costs $5 today")) == "costs $5 today");
+  CHECK(md::parseInline("snake_case_name").size() == 1);
+  CHECK(spansText(md::parseInline("\\*not\\*")) == "*not*");
+  spans = md::parseInline("***x***");
+  CHECK(spansText(spans).find('x') != std::string::npos);
+  CHECK(md::parseInline("`**x**`")[0].style == md::kCode);
+  CHECK(md::parseInline("**a *b* c**")[1].style == (md::kBold | md::kItalic));
+}
+
+void testMath() {
+  CHECK(spansText(md::parseMath("\\alpha + \\beta")) == "α + β");
+  CHECK(spansText(md::parseMath("a \\leq b")) == "a ≤ b");
+
+  auto spans = md::parseMath("x^2");
+  CHECK(spans.size() == 2);
+  CHECK(spans[1].text == "2" && (spans[1].style & md::kSuper) != 0);
+  spans = md::parseMath("a_{ij}");
+  CHECK(spans[1].text == "ij" && (spans[1].style & md::kSub) != 0);
+  spans = md::parseMath("x^{\\alpha}");
+  CHECK(spans[1].text == "α" && (spans[1].style & md::kSuper) != 0);
+
+  spans = md::parseMath("\\frac{a+b}{\\pi}");
+  CHECK(spans.size() == 1 && spans[0].isFraction);
+  CHECK(spans[0].text == "a+b" && spans[0].denominator == "π");
+  spans = md::parseMath("\\frac{\\pi^2}{x_1}");
+  CHECK(spans[0].text == "π²" && spans[0].denominator == "x₁");
+
+  CHECK(spansText(md::parseMath("\\sqrt{x+1}")) == "√(x+1)");
+  CHECK(spansText(md::parseMath("\\sqrt{x}")) == "√x");
+  CHECK(spansText(md::parseMath("\\left(x\\right)")) == "(x)");
+  CHECK(spansText(md::parseMath("\\text{if } x")) == "if  x");
+  CHECK(spansText(md::parseMath("\\nosuchcommand")) == "\\nosuchcommand");
+  CHECK(spansText(md::parseMath("\\frac{a")) == "[a|]");
+  CHECK(spansText(md::parseMath("x^")) == "x");
+  CHECK(spansText(md::parseMath("\\")) == "\\");
+  CHECK(spansText(md::parseInline("is $x^2$ ok")) == "is x2 ok");
+}
+
+void testBlockMarkdown() {
+  const std::vector<std::string> lines = {"# Title", "",        "para", "- item",  "3. third", "> quote", "---",
+                                          "```",     "**raw**", "```",  "$$x^2$$", "$$",       "\\alpha", "$$"};
+  const auto blocks = md::parse(lines);
+  CHECK(blocks.size() == 9);
+  CHECK(blocks[0].kind == md::BlockKind::Heading && blocks[0].level == 1 && spansText(blocks[0].spans) == "Title");
+  CHECK(blocks[1].kind == md::BlockKind::Paragraph && blocks[1].line == 2);
+  CHECK(blocks[2].kind == md::BlockKind::Bullet);
+  CHECK(blocks[3].kind == md::BlockKind::Numbered && blocks[3].number == 3);
+  CHECK(blocks[4].kind == md::BlockKind::Quote);
+  CHECK(blocks[5].kind == md::BlockKind::Rule);
+  CHECK(blocks[6].kind == md::BlockKind::Code && spansText(blocks[6].spans) == "**raw**");
+  CHECK(blocks[7].kind == md::BlockKind::DisplayMath);
+  CHECK(blocks[8].kind == md::BlockKind::DisplayMath && spansText(blocks[8].spans) == "α");
+
+  CHECK(md::parse({"#nope"})[0].kind == md::BlockKind::Paragraph);
+  CHECK(md::parse({"####### seven"})[0].kind == md::BlockKind::Paragraph);
+  CHECK(md::parse({"--"})[0].kind == md::BlockKind::Paragraph);
+  CHECK(md::parse({"1.no"})[0].kind == md::BlockKind::Paragraph);
+
+  // An unclosed fence or $$ must not swallow the rest of the note.
+  const auto open = md::parse({"```", "after"});
+  CHECK(open.size() == 2 && open[1].kind == md::BlockKind::Paragraph);
+  CHECK(md::parse({"$$ x", "after"}).size() == 2);
+  CHECK(md::parse({}).empty());
+}
+
 int main() {
+  testInlineMarkdown();
+  testMath();
+  testBlockMarkdown();
   testDrawnLines();
   testAsleepChoice();
   testWhatIsATask();

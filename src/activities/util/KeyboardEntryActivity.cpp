@@ -112,6 +112,29 @@ const fui::KeyboardKey URL_SNIP_BOTTOM[] = {UKS("abc", fui::KeyKind::Mode, fui::
                                             UK15("Del", fui::KeyKind::Delete, fui::QWERTY_KEY_BACKSPACE),
                                             UKS("OK", fui::KeyKind::Ok, fui::QWERTY_KEY_ENTER, 2)};
 
+constexpr int16_t MARKDOWN_PANEL_VALUE = -20;  // mirrors KeyboardEntryActivity::MARKDOWN_PANEL_KEY
+
+#define MK(label, output, value) UK(label, output, value)
+const fui::KeyboardKey MD_LETTER_BOTTOM[] = {UKS("?123", fui::KeyKind::Mode, fui::QWERTY_KEY_MODE, 2),
+                                             UKW("MD", nullptr, MARKDOWN_PANEL_VALUE, 2), UKW("space", " ", ' ', 4),
+                                             UK(".", ".", '.'), UKS("OK", fui::KeyKind::Ok, fui::QWERTY_KEY_ENTER, 2)};
+const fui::KeyboardKey MD_ROW_BLOCKS[] = {MK("#", "# ", 3001), MK("##", "## ", 3002), MK("-", "- ", 3003),
+                                          MK("1.", "1. ", 3004), MK(">", "> ", 3005)};
+const fui::KeyboardKey MD_ROW_INLINE[] = {MK("bold", "****", 3011), MK("ital", "**", 3012), MK("code", "``", 3013),
+                                          MK("rule", "---", 3014), MK("$$", "$$$$", 3015)};
+const fui::KeyboardKey MATH_ROW1[] = {
+    MK("^", "^", 3031),           MK("_", "_", 3032),   MK("frac", "\\frac{}{}", 3033),
+    MK("sqrt", "\\sqrt{}", 3034), MK("{}", "{}", 3035), MK("$", "$$", 3036)};
+const fui::KeyboardKey MATH_ROW2[] = {MK("alpha", "\\alpha", 3041), MK("beta", "\\beta", 3042),
+                                      MK("pi", "\\pi", 3043),       MK("theta", "\\theta", 3044),
+                                      MK("sig", "\\sigma", 3045),   MK("Delta", "\\Delta", 3046)};
+const fui::KeyboardKey MATH_ROW3[] = {MK("sum", "\\sum", 3051), MK("int", "\\int", 3052), MK("inf", "\\infty", 3053),
+                                      MK("<=", "\\leq", 3054),  MK(">=", "\\geq", 3055),  MK("!=", "\\neq", 3056)};
+const fui::KeyboardKey MD_PANEL_BOTTOM[] = {UKS("abc", fui::KeyKind::Mode, fui::QWERTY_KEY_MODE, 5),
+                                            UK15("Del", fui::KeyKind::Delete, fui::QWERTY_KEY_BACKSPACE),
+                                            UKS("OK", fui::KeyKind::Ok, fui::QWERTY_KEY_ENTER, 2)};
+#undef MK
+
 #undef UK
 #undef UKA
 #undef UKW
@@ -125,6 +148,39 @@ const fui::KeyboardRow URL_SHIFT_ROWS[] = {
 const fui::KeyboardRow URL_SNIP_ROWS[] = {
     {URL_SNIP_ROW1, 3, 0}, {URL_SNIP_ROW2, 3, 0}, {URL_SNIP_ROW3, 3, 0}, {URL_SNIP_BOTTOM, 4, 0}};
 
+const fui::KeyboardRow MD_ROWS[] = {
+    {URL_NUM_ROW, 10, 0}, {URL_ROW1, 10, 0}, {URL_ROW2, 9, 1}, {URL_ROW3, 9, 0}, {MD_LETTER_BOTTOM, 5, 0}};
+const fui::KeyboardRow MD_SHIFT_ROWS[] = {{URL_NUM_ROW, 10, 0},
+                                          {URL_SHIFT_ROW1, 10, 0},
+                                          {URL_SHIFT_ROW2, 9, 1},
+                                          {URL_SHIFT_ROW3, 9, 0},
+                                          {MD_LETTER_BOTTOM, 5, 0}};
+const fui::KeyboardRow MD_COMBINED_ROWS[] = {{MD_ROW_BLOCKS, 5, 0}, {MD_ROW_INLINE, 5, 0}, {MATH_ROW1, 6, 0},
+                                             {MATH_ROW2, 6, 0},     {MATH_ROW3, 6, 0},     {MD_PANEL_BOTTOM, 3, 0}};
+const fui::KeyboardLayout MD_LAYOUT{MD_ROWS, 5};
+const fui::KeyboardLayout MD_SHIFT_LAYOUT{MD_SHIFT_ROWS, 5};
+const fui::KeyboardLayout MD_COMBINED_LAYOUT{MD_COMBINED_ROWS, 6};
+
+// How far back the cursor goes after a key that inserts a pair, so typing lands
+// between them.
+int markdownCursorBack(const int16_t value) {
+  switch (value) {
+    case 3011:
+    case 3015:
+      return 2;
+    case 3012:
+    case 3013:
+    case 3034:
+    case 3035:
+    case 3036:
+      return 1;
+    case 3033:
+      return 3;
+    default:
+      return 0;
+  }
+}
+
 const fui::KeyboardLayout URL_LAYOUT{URL_ROWS, 5};
 const fui::KeyboardLayout URL_SHIFT_LAYOUT{URL_SHIFT_ROWS, 5};
 const fui::KeyboardLayout URL_SNIPPET_LAYOUT{URL_SNIP_ROWS, 4};
@@ -136,7 +192,8 @@ void KeyboardEntryActivity::onEnter() {
   cursorPos = text.length();
   // URL layers are EN-arranged app tables; everything else opens on the UI
   // language's layout, or on an enabled one if the user switched that off.
-  layoutId = inputType == InputType::Url ? fui::KeyboardLayoutId::QwertyEn : keyboard_layouts::startingLayout();
+  layoutId = inputType == InputType::Url || inputType == InputType::Markdown ? fui::KeyboardLayoutId::QwertyEn
+                                                                             : keyboard_layouts::startingLayout();
   // The key only earns its slot in the bottom row with somewhere to go.
   const uint16_t enabledLayouts = keyboard_layouts::enabled();
   showLangKey = (enabledLayouts & (enabledLayouts - 1)) != 0;
@@ -167,6 +224,10 @@ void KeyboardEntryActivity::onExit() { Activity::onExit(); }
 
 const fui::KeyboardLayout& KeyboardEntryActivity::currentLayout() const {
   if (symbols) return fui::builtinKeyboardLayout(layoutId, shifted, true);
+  if (inputType == InputType::Markdown) {
+    if (markdownPanel) return MD_COMBINED_LAYOUT;
+    return shifted ? MD_SHIFT_LAYOUT : MD_LAYOUT;
+  }
   if (inputType == InputType::Url) {
     if (urlPanel) return URL_SNIPPET_LAYOUT;
     return shifted ? URL_SHIFT_LAYOUT : URL_LAYOUT;
@@ -284,7 +345,9 @@ bool KeyboardEntryActivity::activateValue(const int16_t value, const bool longPr
     case fui::QWERTY_KEY_MODE:
       delPressCount = 0;
       hintVisible = false;
-      if (urlPanel) {
+      if (markdownPanel) {
+        markdownPanel = false;
+      } else if (urlPanel) {
         urlPanel = false;
       } else {
         symbols = !symbols;
@@ -315,6 +378,14 @@ bool KeyboardEntryActivity::activateValue(const int16_t value, const bool longPr
       shifted = false;
       clampSelection();
       return true;
+    case MARKDOWN_PANEL_KEY:
+      delPressCount = 0;
+      hintVisible = false;
+      markdownPanel = !markdownPanel;
+      symbols = false;
+      shifted = false;
+      clampSelection();
+      return true;
     case fui::QWERTY_KEY_ENTER:
       onComplete(text);
       return false;
@@ -339,7 +410,12 @@ bool KeyboardEntryActivity::activateValue(const int16_t value, const bool longPr
       const char* out = longPress ? fui::keyboardAltOutputFor(layer, value) : nullptr;
       if (!out) out = fui::keyboardOutputFor(layer, value);
       if (!out) return false;
-      insertUtf8(out);
+      {
+        const size_t before = text.length();
+        insertUtf8(out);
+        const int back = markdownCursorBack(value);
+        if (back > 0 && text.length() > before) cursorPos -= static_cast<size_t>(back);
+      }
       if (shifted && !symbols) {
         shifted = false;  // shift auto-releases after one character
         clampSelection();
@@ -962,7 +1038,7 @@ void KeyboardEntryActivity::render(RenderLock&&) {
       if (!text.empty()) {
         drawTip(tr(STR_KB_HINT_CLEAR_TEXT), y);
       }
-    } else if (symbols) {
+    } else if (symbols || markdownPanel) {
       if (!text.empty()) {
         drawTip(tr(STR_KB_HINT_CLEAR_TEXT), y);
       }
@@ -1008,8 +1084,8 @@ void KeyboardEntryActivity::render(RenderLock&&) {
   props.okLabel = tr(STR_OK_BUTTON);
   // Match the label to the layer the mode key leads back from: the symbols
   // layer and the URL snippet panel both label it "abc" in the static tables.
-  props.modeLabel =
-      (symbols || (inputType == InputType::Url && urlPanel)) ? tr(STR_KEY_MODE_ABC) : tr(STR_KEY_MODE_SYMBOLS);
+  props.modeLabel = (symbols || markdownPanel || (inputType == InputType::Url && urlPanel)) ? tr(STR_KEY_MODE_ABC)
+                                                                                            : tr(STR_KEY_MODE_SYMBOLS);
   props.inputMask = static_cast<uint16_t>(fui::InputTouch | fui::InputLongPress);
   props.selectedIndex = (cursorMode || mappedInput.hasTouch()) ? -1 : static_cast<int16_t>(selectedLogicalIndex());
   // The 12-column Arabic rows need the smaller font for wide isolated letters.
@@ -1017,7 +1093,8 @@ void KeyboardEntryActivity::render(RenderLock&&) {
                                                                                  : fui::GfxRendererTarget::FONT_BODY;
   props.altText.font = fui::GfxRendererTarget::FONT_SMALL;
   props.gap = props.rowGap = static_cast<int16_t>(keyboardGap(metrics));
-  if (urlPanel) props.uniformKeyWidth = false;  // Shortcut rows stretch independently.
+  if (urlPanel || markdownPanel || inputType == InputType::Markdown)
+    props.uniformKeyWidth = false;  // Shortcut rows stretch independently.
   if (!mappedInput.hasTouch()) props.background = fui::Paint::none();
   frame.target().fill(kbRect, props.background);
   const int bottomEdge =

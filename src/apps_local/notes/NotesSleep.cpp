@@ -11,6 +11,7 @@
 #include "../ui/ToyboxFonts.h"
 #include "../ui/ToyboxScreen.h"
 #include "../ui/ToyboxTheme.h"
+#include "NotesFaces.h"
 #include "NotesLibrary.h"
 #include "NotesScreens.h"
 
@@ -92,6 +93,7 @@ bool drawAsleep(GfxRenderer& renderer) {
   fui::GfxRendererTarget target = toybox::makeTarget(renderer);
   // A sleep screen cannot turn a page, so what does not fit is counted, in
   // the page label's place: "1 / 3" says there is more than this.
+  model.bindFace = notesui::bindNoteFace;
   const std::vector<int> starts = notesui::notePageStarts(target, target.deviceContext(), model);
   char label[32] = "";
   if (starts.size() > 1) {
