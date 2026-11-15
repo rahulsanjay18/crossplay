@@ -7,6 +7,7 @@
 #include <HalGPIO.h>
 #include <I18n.h>
 #include <WiFi.h>
+#include <esp_random.h>
 
 #include <cstddef>
 
@@ -26,7 +27,6 @@
 namespace {
 // AP Mode configuration
 constexpr const char* AP_SSID = "CrossPlay";
-constexpr const char* AP_PASSWORD = nullptr;  // Open network for ease of use
 // The mDNS name is per-device now (see util/DeviceHostname.h): two X4 Pros
 // on one network both answered for "crossplay", and a QR pointing at the
 // name would open whichever replied first. The AP SSID below is UNCHANGED --
@@ -179,6 +179,8 @@ void CrossPointWebServerActivity::onNetworkModeSelected(const NetworkMode mode) 
     modeName = "Connect to Calibre";
   } else if (mode == NetworkMode::CREATE_HOTSPOT) {
     modeName = "Create Hotspot";
+  } else if (mode == NetworkMode::GUEST_SHARE) {
+    modeName = "Share Files";
 #if FREEINK_CAP_USB_MSC
   } else if (mode == NetworkMode::USB_DRIVE) {
     modeName = "USB Drive";
@@ -194,7 +196,7 @@ void CrossPointWebServerActivity::onNetworkModeSelected(const NetworkMode mode) 
 #endif
 
   networkMode = mode;
-  isApMode = (mode == NetworkMode::CREATE_HOTSPOT);
+  isApMode = (mode == NetworkMode::CREATE_HOTSPOT || mode == NetworkMode::GUEST_SHARE);
 
   if (mode == NetworkMode::CONNECT_CALIBRE) {
     startActivityForResult(
@@ -273,13 +275,9 @@ void CrossPointWebServerActivity::startAccessPoint() {
   delay(100);
 
   // Start soft AP
-  bool apStarted;
-  if (AP_PASSWORD && strlen(AP_PASSWORD) >= 8) {
-    apStarted = WiFi.softAP(AP_SSID, AP_PASSWORD, AP_CHANNEL, false, AP_MAX_CONNECTIONS);
-  } else {
-    // Open network (no password)
-    apStarted = WiFi.softAP(AP_SSID, nullptr, AP_CHANNEL, false, AP_MAX_CONNECTIONS);
-  }
+  // A new password each time, so someone given one cannot come back later.
+  guestshare::generatePassword(apPassword, [] { return esp_random(); });
+  const bool apStarted = WiFi.softAP(AP_SSID, apPassword, AP_CHANNEL, false, AP_MAX_CONNECTIONS);
 
   if (!apStarted) {
     LOG_ERR("WEBACT", "ERROR: Failed to start Access Point!");
@@ -329,7 +327,12 @@ void CrossPointWebServerActivity::startWebServer() {
   }
 
   // Create the web server instance
-  webServer.reset(new CrossPointWebServer(CrossPointWebServer::Surface::Full));
+  if (networkMode == NetworkMode::GUEST_SHARE && !Storage.exists(guestshare::kShareRoot)) {
+    Storage.mkdir(guestshare::kShareRoot);
+  }
+  webServer.reset(new CrossPointWebServer(networkMode == NetworkMode::GUEST_SHARE
+                                              ? CrossPointWebServer::Surface::GuestShare
+                                              : CrossPointWebServer::Surface::Full));
   // An upload holds loop() inside handleClient(), so input is sampled on each received chunk instead. On a slow
   // link chunks come ~0.5 s apart, so a button found down gets a second sample past the SDK's 5 ms debounce.
   webServer->setUploadCancelCheck([this] {
@@ -499,7 +502,9 @@ void CrossPointWebServerActivity::renderServerRunning() const {
   const auto pageWidth = renderer.getScreenWidth();
 
   GUI.drawHeader(renderer, Rect{0, metrics.topPadding, pageWidth, metrics.headerHeight},
-                 isApMode ? tr(STR_HOTSPOT_MODE) : tr(STR_FILE_TRANSFER), nullptr);
+                 networkMode == NetworkMode::GUEST_SHARE ? tr(STR_SHARE_FILES)
+                                                         : (isApMode ? tr(STR_HOTSPOT_MODE) : tr(STR_FILE_TRANSFER)),
+                 nullptr);
   GUI.drawSubHeader(renderer, Rect{0, metrics.topPadding + metrics.headerHeight, pageWidth, metrics.tabBarHeight},
                     connectedSSID.c_str());
 
@@ -517,13 +522,17 @@ void CrossPointWebServerActivity::renderServerRunning() const {
 
     // Show QR code for Wifi
     // follows spec at https://github.com/zxing/zxing/wiki/Barcode-Contents#wi-fi-network-config-android-ios-11
-    const std::string wifiConfig = std::string("WIFI:T:nopass;S:") + connectedSSID + ";;";
+    const std::string wifiConfig = guestshare::wifiQrPayload(connectedSSID, apPassword);
     const Rect qrBoundsWifi(metrics.contentSidePadding, startY, QR_CODE_WIDTH, QR_CODE_HEIGHT);
     QrUtils::drawQrCode(renderer, qrBoundsWifi, wifiConfig);
 
     // Show network name
     renderer.drawText(UI_10_FONT_ID, metrics.contentSidePadding + QR_CODE_WIDTH + metrics.verticalSpacing, startY + 80,
                       connectedSSID.c_str());
+    char passwordLine[48];
+    snprintf(passwordLine, sizeof(passwordLine), "%s: %s", tr(STR_PASSWORD), apPassword);
+    renderer.drawText(UI_10_FONT_ID, metrics.contentSidePadding + QR_CODE_WIDTH + metrics.verticalSpacing,
+                      startY + 80 + height10 + metrics.verticalSpacing, passwordLine);
 
     startY += QR_CODE_HEIGHT + 2 * metrics.verticalSpacing;
 

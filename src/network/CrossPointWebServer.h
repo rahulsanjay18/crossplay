@@ -73,6 +73,9 @@ class CrossPointWebServer {
     // app sets before begin() and the client can never name. There is nothing
     // to validate because nothing is accepted.
     NotesOnly,
+    // GuestShare is what the hotspot hands to other people: list and download
+    // under /share, and nothing that writes or reaches the rest of the card.
+    GuestShare,
   };
 
   explicit CrossPointWebServer(Surface surface = Surface::Full);
@@ -131,6 +134,7 @@ class CrossPointWebServer {
   bool isDev() const { return surface == Surface::DeveloperOnly; }
   bool isWallpapers() const { return surface == Surface::WallpapersOnly; }
   bool isNotes() const { return surface == Surface::NotesOnly; }
+  bool isGuest() const { return surface == Surface::GuestShare; }
 
   // The wallpaper upload, streamed straight to the card. Separate from
   // UploadState because it shares nothing with the multipart path: no
@@ -219,6 +223,10 @@ class CrossPointWebServer {
 
   // The Wallpapers surface.
   void handleWallpaperPage() const;
+  void handleGuestPage() const;
+  void handleGuestList() const;
+  void handleGuestDownload() const;
+  void streamFileList(const String& path, bool neverShowHidden) const;
   void handleNotesPage() const;
   void handleNotesText();
   void handleNotesSave();
