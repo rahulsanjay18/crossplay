@@ -17,7 +17,15 @@ Flashing writes the bootloader, partition table, blank otadata and app, exactly
 as flash-sticky.sh does: NVS is left alone, and the new image is the one that
 boots even if the device last took an over-the-air update.
 
-Listens on 127.0.0.1 only.
+Listens on 127.0.0.1 unless told otherwise. To use it from another device, run it
+on a machine on the same network as the Sticky, such as a home server:
+
+    ./scripts_local/app-builder.py --host 0.0.0.0
+
+It then prints an address with an access key in it. Open that address once on
+your phone or laptop; the browser keeps the key in a cookie, and every request
+without it is refused, so others on the network cannot build or flash. Pass
+--key to keep the same key across restarts.
 """
 
 import argparse
@@ -25,6 +33,7 @@ import csv
 import html
 import importlib.util
 import json
+import secrets
 import socket
 import time
 import urllib.error
@@ -360,10 +369,31 @@ def page():
     return PAGE.replace("__SECTIONS__", "\n".join(sections))
 
 
-def make_handler(environment_name):
+def make_handler(environment_name, key):
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, *args):
             pass
+
+        def allowed(self):
+            """True when no key is required or the request carries it. A first
+            visit with ?key= is answered with the cookie and sent on to the page."""
+            if not key:
+                return True
+            url = urllib.parse.urlsplit(self.path)
+            offered = urllib.parse.parse_qs(url.query).get("key", [""])[0]
+            if offered and secrets.compare_digest(offered, key):
+                self.send_response(303)
+                self.send_header("Set-Cookie", f"builder_key={key}; HttpOnly; SameSite=Strict; Path=/")
+                self.send_header("Location", url.path or "/")
+                self.end_headers()
+                return False
+            for part in self.headers.get("Cookie", "").split(";"):
+                name, _, value = part.strip().partition("=")
+                if name == "builder_key" and secrets.compare_digest(value, key):
+                    return True
+            self.reply(403, "Open the address the builder printed when it started; it carries the key.",
+                       "text/plain")
+            return False
 
         def reply(self, code, body, kind="application/json"):
             data = body.encode("utf-8")
@@ -374,6 +404,8 @@ def make_handler(environment_name):
             self.wfile.write(data)
 
         def do_GET(self):
+            if not self.allowed():
+                return
             if self.path == "/":
                 self.reply(200, page(), "text/html")
             elif self.path == "/api/status":
@@ -386,6 +418,8 @@ def make_handler(environment_name):
                 self.reply(404, json.dumps({"error": "not found"}))
 
         def do_POST(self):
+            if not self.allowed():
+                return
             if self.path != "/api/run":
                 self.reply(404, json.dumps({"error": "not found"}))
                 return
@@ -421,17 +455,48 @@ def make_handler(environment_name):
     return Handler
 
 
+def lan_addresses():
+    """This machine's addresses other devices can reach, best effort."""
+    found = []
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as probe:
+            probe.connect(("192.0.2.1", 9))  # never sent: picks the outgoing interface
+            found.append(probe.getsockname()[0])
+    except OSError:
+        pass
+    try:
+        for address in socket.gethostbyname_ex(socket.gethostname())[2]:
+            if not address.startswith("127."):
+                found.append(address)
+    except OSError:
+        pass
+    return found
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--port", type=int, default=8765, help="local port for the page")
+    parser.add_argument("--port", type=int, default=8765, help="port for the page")
+    parser.add_argument("--host", default="127.0.0.1",
+                        help="address to listen on; 0.0.0.0 to reach the page from other devices")
+    parser.add_argument("--key", help="access key when not listening on 127.0.0.1 (default: a new random one)")
     parser.add_argument("--env", default="gh_release_sticky", help="PlatformIO environment")
     parser.add_argument("--no-browser", action="store_true", help="do not open a browser")
     args = parser.parse_args()
-    server = ThreadingHTTPServer(("127.0.0.1", args.port), make_handler(args.env))
-    address = f"http://127.0.0.1:{args.port}/"
-    print(f"CrossPlay builder at {address}  (Ctrl+C to stop)")
-    if not args.no_browser:
-        webbrowser.open(address)
+    local = args.host in ("127.0.0.1", "localhost", "::1")
+    key = "" if local else (args.key or secrets.token_urlsafe(18))
+    server = ThreadingHTTPServer((args.host, args.port), make_handler(args.env, key))
+    if local:
+        address = f"http://127.0.0.1:{args.port}/"
+        print(f"CrossPlay builder at {address}  (Ctrl+C to stop)")
+        if not args.no_browser:
+            webbrowser.open(address)
+    else:
+        print(f"CrossPlay builder listening on {args.host}:{args.port}  (Ctrl+C to stop)")
+        print("Open one of these on your phone or laptop, once; the key is kept in a cookie:")
+        for host in sorted(set(lan_addresses()) | ({args.host} - {"0.0.0.0", "::"})):
+            print(f"    http://{host}:{args.port}/?key={key}")
+    # Shown at once even when nothing reads it until later, as under systemd.
+    sys.stdout.flush()
     try:
         server.serve_forever()
     except KeyboardInterrupt:
