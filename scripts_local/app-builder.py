@@ -25,7 +25,8 @@ on a machine on the same network as the Sticky, such as a home server:
 It then prints an address with an access key in it. Open that address once on
 your phone or laptop; the browser keeps the key in a cookie, and every request
 without it is refused, so others on the network cannot build or flash. Pass
---key to keep the same key across restarts.
+--key to keep the same key across restarts, or --no-key to drop it on a network
+only you use.
 """
 
 import argparse
@@ -479,11 +480,13 @@ def main():
     parser.add_argument("--host", default="127.0.0.1",
                         help="address to listen on; 0.0.0.0 to reach the page from other devices")
     parser.add_argument("--key", help="access key when not listening on 127.0.0.1 (default: a new random one)")
+    parser.add_argument("--no-key", action="store_true",
+                        help="serve the network without a key: anyone on it can build and flash")
     parser.add_argument("--env", default="gh_release_sticky", help="PlatformIO environment")
     parser.add_argument("--no-browser", action="store_true", help="do not open a browser")
     args = parser.parse_args()
     local = args.host in ("127.0.0.1", "localhost", "::1")
-    key = "" if local else (args.key or secrets.token_urlsafe(18))
+    key = "" if local or args.no_key else (args.key or secrets.token_urlsafe(18))
     server = ThreadingHTTPServer((args.host, args.port), make_handler(args.env, key))
     if local:
         address = f"http://127.0.0.1:{args.port}/"
@@ -492,9 +495,12 @@ def main():
             webbrowser.open(address)
     else:
         print(f"CrossPlay builder listening on {args.host}:{args.port}  (Ctrl+C to stop)")
-        print("Open one of these on your phone or laptop, once; the key is kept in a cookie:")
+        if key:
+            print("Open one of these on your phone or laptop, once; the key is kept in a cookie:")
+        else:
+            print("No key: anyone who can reach this address can build and flash. Open one of these:")
         for host in sorted(set(lan_addresses()) | ({args.host} - {"0.0.0.0", "::"})):
-            print(f"    http://{host}:{args.port}/?key={key}")
+            print(f"    http://{host}:{args.port}/" + (f"?key={key}" if key else ""))
     # Shown at once even when nothing reads it until later, as under systemd.
     sys.stdout.flush()
     try:
