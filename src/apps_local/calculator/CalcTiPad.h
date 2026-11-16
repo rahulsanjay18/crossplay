@@ -100,7 +100,8 @@ inline Rect16 keyRect(const Rect16& grid, const int16_t gap, const int index) {
   const int column = start % kColumns;
   const int row = start / kColumns;
   const int span = kKeys[index].span;
-  return Rect16{static_cast<int16_t>(grid.x + column * (cellW + gap)), static_cast<int16_t>(grid.y + row * (cellH + gap)),
+  return Rect16{static_cast<int16_t>(grid.x + column * (cellW + gap)),
+                static_cast<int16_t>(grid.y + row * (cellH + gap)),
                 static_cast<int16_t>(span * cellW + (span - 1) * gap), cellH};
 }
 

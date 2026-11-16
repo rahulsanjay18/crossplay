@@ -32,8 +32,8 @@ struct ControlKey {
   Control control;
 };
 
-constexpr ControlKey kGraphControls[] = {{"IN", ZoomIn},   {"OUT", ZoomOut},       {"STD", Standard},
-                                         {"FIT", Fit},     {"Yn", NextFunction},   {"HOME", Home}};
+constexpr ControlKey kGraphControls[] = {{"IN", ZoomIn}, {"OUT", ZoomOut},     {"STD", Standard},
+                                         {"FIT", Fit},   {"Yn", NextFunction}, {"HOME", Home}};
 constexpr ControlKey kTableControls[] = {{"UP", TableUp}, {"DOWN", TableDown}, {"GRAPH", TableGraph}, {"HOME", Home}};
 
 int16_t lineHeight() { return kSmallCut.lineHeight; }

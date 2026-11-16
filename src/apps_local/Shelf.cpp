@@ -12,91 +12,238 @@
 #include "ShelfFolderActivity.h"
 #include "ShelfHidden.h"
 #include "ShelfState.h"
+#ifndef CROSSPLAY_OMIT_BATTLESHIP
 #include "battleship/BattleshipActivity.h"
+#endif
+#ifndef CROSSPLAY_OMIT_CALCULATOR
 #include "calculator/CalculatorActivity.h"
+#endif
+#ifndef CROSSPLAY_OMIT_CHECKERS
 #include "checkers/CheckersActivity.h"
+#endif
+#ifndef CROSSPLAY_OMIT_CHESS
 #include "chess/ChessActivity.h"
+#endif
+#ifndef CROSSPLAY_OMIT_CONNECTFOUR
 #include "connectfour/ConnectFourActivity.h"
+#endif
+#ifndef CROSSPLAY_OMIT_CONNECTIONS
 #include "connections/ConnectionsActivity.h"
+#endif
+#ifndef CROSSPLAY_OMIT_DUNGEON
 #include "dungeon/DungeonActivity.h"
+#endif
+#ifndef CROSSPLAY_OMIT_FOREHEAD
 #include "forehead/ForeheadActivity.h"
+#endif
+#ifndef CROSSPLAY_OMIT_GO
 #include "go/GoActivity.h"
+#endif
+#ifndef CROSSPLAY_OMIT_HACKERNEWS
 #include "hackernews/HackerNewsActivity.h"
+#endif
+#ifndef CROSSPLAY_OMIT_HEARTS
 #include "hearts/HeartsActivity.h"
+#endif
+#ifndef CROSSPLAY_OMIT_HEX
 #include "hex/HexActivity.h"
+#endif
+#ifndef CROSSPLAY_OMIT_INSIDER
 #include "insider/InsiderActivity.h"
+#endif
+#ifndef CROSSPLAY_OMIT_INSTAPAPER
 #include "instapaper/InstapaperActivity.h"
+#endif
+#ifndef CROSSPLAY_OMIT_JAIPUR
 #include "jaipur/JaipurActivity.h"
+#endif
+#ifndef CROSSPLAY_OMIT_KNUCKLEBONES
 #include "knucklebones/KnucklebonesActivity.h"
+#endif
+#ifndef CROSSPLAY_OMIT_MINESWEEPER
 #include "minesweeper/MinesweeperActivity.h"
+#endif
+#ifndef CROSSPLAY_OMIT_MURDLE
 #include "murdle/MurdleActivity.h"
+#endif
+#ifndef CROSSPLAY_OMIT_NOTES
 #include "notes/NotesActivity.h"
+#endif
+#ifndef CROSSPLAY_OMIT_PICROSS
 #include "picross/PicrossActivity.h"
+#endif
 #include "player/PlayerActivity.h"
+#ifndef CROSSPLAY_OMIT_SEASALT
 #include "seasalt/SeaSaltActivity.h"
+#endif
+#ifndef CROSSPLAY_OMIT_SHOGI
 #include "shogi/ShogiActivity.h"
+#endif
+#ifndef CROSSPLAY_OMIT_SOLITAIRE
 #include "solitaire/SolitaireActivity.h"
+#endif
+#ifndef CROSSPLAY_OMIT_SONGS
 #include "songs/SongsActivity.h"
+#endif
+#ifndef CROSSPLAY_OMIT_STUDY
 #include "study/StudyActivity.h"
+#endif
+#ifndef CROSSPLAY_OMIT_SUDOKU
 #include "sudoku/SudokuActivity.h"
+#endif
+#ifndef CROSSPLAY_OMIT_TOYBATTLE
 #include "toybattle/ToyBattleActivity.h"
+#endif
+#ifndef CROSSPLAY_OMIT_TRIVIA
 #include "trivia/TriviaActivity.h"
+#endif
 #include "ui/ToyboxIcons.h"
+#ifndef CROSSPLAY_OMIT_UNDERHAND
 #include "underhand/UnderhandActivity.h"
+#endif
+#ifndef CROSSPLAY_OMIT_WALLPAPERS
 #include "wallpapers/WallpapersActivity.h"
+#endif
+#ifndef CROSSPLAY_OMIT_WAVELENGTH
 #include "wavelength/WavelengthActivity.h"
+#endif
+#ifndef CROSSPLAY_OMIT_WIKIPEDIA
 #include "wikipedia/WikipediaActivity.h"
+#endif
+#ifndef CROSSPLAY_OMIT_WORDLE
 #include "wordle/WordleActivity.h"
+#endif
+#ifndef CROSSPLAY_OMIT_XIANGQI
 #include "xiangqi/XiangqiActivity.h"
+#endif
+#ifndef CROSSPLAY_OMIT_XKCD
 #include "xkcd/XkcdActivity.h"
+#endif
+#ifndef CROSSPLAY_OMIT_YAHTZEE
 #include "yahtzee/YahtzeeActivity.h"
+#endif
 
 namespace {
 
 // Icons come from tools_local/toybox/icons.txt via Lucide. Picked for silhouette
 // rather than literalness: a crown, a hull, a grid and a card suit share no
 // shape, so a row is scannable before the label is read.
+// Each row can be left out of a build with -DCROSSPLAY_OMIT_<NAME>, which also
+// leaves the app out of the image. scripts_local/pick-apps.py writes them.
+// A folder may not be emptied: an array cannot have no elements.
 constexpr shelf::Item kGames[] = {
+#ifndef CROSSPLAY_OMIT_CHESS
     {"CHESS", &icon_chess_32, &ChessActivity::create},
+#endif
+#ifndef CROSSPLAY_OMIT_BATTLESHIP
     {"BATTLESHIP", &icon_battleship_32, &BattleshipActivity::create},
+#endif
+#ifndef CROSSPLAY_OMIT_CONNECTIONS
     {"CONNECTIONS", &icon_connections_32, &ConnectionsActivity::create},
+#endif
+#ifndef CROSSPLAY_OMIT_SOLITAIRE
     {"SOLITAIRE", &icon_solitaire_32, &SolitaireActivity::create},
+#endif
+#ifndef CROSSPLAY_OMIT_HEARTS
     {"HEARTS", &icon_hearts_32, &HeartsActivity::create},
+#endif
+#ifndef CROSSPLAY_OMIT_DUNGEON
     {"D&DIAGRAMS", &icon_dungeon_32, &DungeonActivity::create},
+#endif
+#ifndef CROSSPLAY_OMIT_INSIDER
     {"INSIDER", &icon_insider_32, &InsiderActivity::create},
+#endif
+#ifndef CROSSPLAY_OMIT_JAIPUR
     {"JAIPUR", &icon_jaipur_32, &JaipurActivity::create},
+#endif
+#ifndef CROSSPLAY_OMIT_SEASALT
     {"SEA SALT", &icon_seasalt_32, &SeaSaltActivity::create},
+#endif
+#ifndef CROSSPLAY_OMIT_MURDLE
     {"MURDLE", &icon_murdle_32, &MurdleActivity::create},
+#endif
+#ifndef CROSSPLAY_OMIT_CHECKERS
     {"CHECKERS", &icon_checkers_32, &CheckersActivity::create},
+#endif
+#ifndef CROSSPLAY_OMIT_CONNECTFOUR
     {"CONNECT FOUR", &icon_connectfour_32, &ConnectFourActivity::create},
+#endif
+#ifndef CROSSPLAY_OMIT_YAHTZEE
     {"YAHTZEE", &icon_yahtzee_32, &YahtzeeActivity::create},
+#endif
+#ifndef CROSSPLAY_OMIT_KNUCKLEBONES
     {"KNUCKLEBONES", &icon_knucklebones_32, &KnucklebonesActivity::create},
+#endif
+#ifndef CROSSPLAY_OMIT_MINESWEEPER
     {"MINESWEEPER", &icon_minesweeper_32, &MinesweeperActivity::create},
+#endif
+#ifndef CROSSPLAY_OMIT_SUDOKU
     {"SUDOKU", &icon_sudoku_32, &SudokuActivity::create},
+#endif
+#ifndef CROSSPLAY_OMIT_PICROSS
     {"PICROSS", &icon_picross_32, &PicrossActivity::create},
+#endif
+#ifndef CROSSPLAY_OMIT_TOYBATTLE
     {"TOY BATTLE", &icon_toybattle_32, &ToyBattleActivity::create},
+#endif
+#ifndef CROSSPLAY_OMIT_FOREHEAD
     {"FOREHEAD", &icon_forehead_32, &ForeheadActivity::create},
+#endif
+#ifndef CROSSPLAY_OMIT_TRIVIA
     {"TRIVIA", &icon_trivia_32, &TriviaActivity::create},
+#endif
+#ifndef CROSSPLAY_OMIT_WAVELENGTH
     {"WAVELENGTH", &icon_wavelength_32, &WavelengthActivity::create},
+#endif
+#ifndef CROSSPLAY_OMIT_GO
     {"GO", &icon_go_32, &GoActivity::create},
+#endif
+#ifndef CROSSPLAY_OMIT_SHOGI
     {"SHOGI", &icon_shogi_32, &ShogiActivity::create},
+#endif
+#ifndef CROSSPLAY_OMIT_XIANGQI
     {"XIANGQI", &icon_xiangqi_32, &XiangqiActivity::create},
+#endif
+#ifndef CROSSPLAY_OMIT_HEX
     {"HEX", &icon_hex_32, &HexActivity::create},
+#endif
+#ifndef CROSSPLAY_OMIT_UNDERHAND
     {"UNDERHAND", &icon_underhand_32, &UnderhandActivity::create},
+#endif
+#ifndef CROSSPLAY_OMIT_WORDLE
     {"WORDLE", &icon_wordle_32, &WordleActivity::create},
+#endif
 };
 constexpr shelf::Item kApps[] = {
+#ifndef CROSSPLAY_OMIT_STUDY
     {"STUDY", &icon_study_32, &StudyActivity::create},
+#endif
+#ifndef CROSSPLAY_OMIT_HACKERNEWS
     {"HACKER NEWS", &icon_hackernews_32, &HackerNewsActivity::create},
+#endif
+#ifndef CROSSPLAY_OMIT_XKCD
     {"XKCD", &icon_xkcd_32, &XkcdActivity::create},
+#endif
+#ifndef CROSSPLAY_OMIT_INSTAPAPER
     {"INSTAPAPER", &icon_instapaper_32, &InstapaperActivity::create},
+#endif
+#ifndef CROSSPLAY_OMIT_WALLPAPERS
     {"WALLPAPERS", &icon_wallpapers_32, &WallpapersActivity::create},
+#endif
+#ifndef CROSSPLAY_OMIT_WIKIPEDIA
     {"WIKIPEDIA", &icon_wikipedia_32, &WikipediaActivity::create},
+#endif
+#ifndef CROSSPLAY_OMIT_CALCULATOR
     {"CALCULATOR", &icon_calculator_32, &CalculatorActivity::create},
+#endif
+#ifndef CROSSPLAY_OMIT_SONGS
     {"SONGS", &icon_cat_music_32, &SongsActivity::create},
-    // Card #516. The icon is the Lucide list mark borrowed from Murdle while
-    // the screens are being chosen; a Notes mark comes with the real app.
+#endif
+// Card #516. The icon is the Lucide list mark borrowed from Murdle while
+// the screens are being chosen; a Notes mark comes with the real app.
+#ifndef CROSSPLAY_OMIT_NOTES
     {"NOTES", &icon_murdle_face_clues_32, &NotesActivity::create},
+#endif
 };
 
 // The two rows Home grows, in reading order. Titles are Title Case because

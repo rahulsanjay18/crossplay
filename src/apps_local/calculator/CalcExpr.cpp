@@ -19,10 +19,9 @@ struct Function {
 enum FunctionId { Sin, Cos, Tan, Asin, Acos, Atan, Ln, Log, Sqrt, Abs, Exp, Floor, Round };
 
 // Longest names first, so "asin" is not read as "a" times "sin".
-constexpr Function kFunctions[] = {{"asin", Asin}, {"acos", Acos}, {"atan", Atan},   {"sqrt", Sqrt},
-                                   {"sin", Sin},   {"cos", Cos},   {"tan", Tan},     {"abs", Abs},
-                                   {"exp", Exp},   {"log", Log},   {"floor", Floor}, {"round", Round},
-                                   {"ln", Ln}};
+constexpr Function kFunctions[] = {{"asin", Asin},   {"acos", Acos},   {"atan", Atan}, {"sqrt", Sqrt}, {"sin", Sin},
+                                   {"cos", Cos},     {"tan", Tan},     {"abs", Abs},   {"exp", Exp},   {"log", Log},
+                                   {"floor", Floor}, {"round", Round}, {"ln", Ln}};
 
 class Parser {
  public:
@@ -214,9 +213,7 @@ class Parser {
     return std::strtod(digits.c_str(), nullptr);
   }
 
-  double toRadians(const double value) const {
-    return context_.angle == Angle::Degrees ? value * kPi / 180.0 : value;
-  }
+  double toRadians(const double value) const { return context_.angle == Angle::Degrees ? value * kPi / 180.0 : value; }
 
   double fromRadians(const double value) const {
     return context_.angle == Angle::Degrees ? value * 180.0 / kPi : value;
