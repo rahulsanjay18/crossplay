@@ -239,8 +239,8 @@ constexpr shelf::Item kApps[] = {
 #ifndef CROSSPLAY_OMIT_SONGS
     {"SONGS", &icon_cat_music_32, &SongsActivity::create},
 #endif
-    // Card #516. The icon is the Lucide list mark borrowed from Murdle while
-    // the screens are being chosen; a Notes mark comes with the real app.
+// Card #516. The icon is the Lucide list mark borrowed from Murdle while
+// the screens are being chosen; a Notes mark comes with the real app.
 #ifndef CROSSPLAY_OMIT_NOTES
     {"NOTES", &icon_murdle_face_clues_32, &NotesActivity::create},
 #endif
