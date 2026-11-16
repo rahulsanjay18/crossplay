@@ -4,8 +4,14 @@
     ./scripts_local/app-builder.py            # opens http://127.0.0.1:8765
     ./scripts_local/app-builder.py --port 9000 --no-browser
 
-Tick what you want, press BUILD AND FLASH with the device on USB, and watch the
+Tick what you want, choose USB or Wi-Fi, press BUILD AND FLASH, and watch the
 log. The choice is shared with pick-apps.py (crossplay-apps.local.txt).
+
+Wi-Fi needs Developer Mode on the device (Settings > System > Developer Mode),
+which shows its address and a six-digit pairing code. The token from pairing is
+cached in ~/.crossplay-devtoken, shared with wifi-flash.sh. Discovery broadcasts
+on the local network, which WSL2 does not usually pass on, so type the address
+the device shows when it is not found.
 
 Flashing writes the bootloader, partition table, blank otadata and app, exactly
 as flash-sticky.sh does: NVS is left alone, and the new image is the one that
@@ -19,6 +25,11 @@ import csv
 import html
 import importlib.util
 import json
+import socket
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
 import os
 import subprocess
 import sys
@@ -148,6 +159,99 @@ def flash(environment_name, port):
     return f"flashed {port}"
 
 
+TOKEN_FILE = os.path.expanduser("~/.crossplay-devtoken")
+
+
+def discover():
+    """Devices answering the discovery broadcast, as (address, name)."""
+    found = {}
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as probe:
+        probe.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+        probe.settimeout(0.4)
+        deadline = time.time() + 3
+        while time.time() < deadline:
+            try:
+                probe.sendto(b"hello", ("255.255.255.255", 8134))
+            except OSError:
+                pass
+            try:
+                while True:
+                    data, address = probe.recvfrom(256)
+                    if b"crosspoint" in data.lower():
+                        found[address[0]] = data.decode("utf-8", "replace").strip()
+            except (socket.timeout, OSError):
+                pass
+    return sorted(found.items())
+
+
+def request(method, url, token="", data=None, kind=None, timeout=15):
+    """(status, body) for one request to the device; status 0 when it did not answer."""
+    headers = {}
+    if token:
+        headers["X-Dev-Token"] = token
+    if kind:
+        headers["Content-Type"] = kind
+    try:
+        with urllib.request.urlopen(urllib.request.Request(url, data=data, method=method, headers=headers),
+                                    timeout=timeout) as reply:
+            return reply.status, reply.read().decode("utf-8", "replace")
+    except urllib.error.HTTPError as error:
+        return error.code, error.read().decode("utf-8", "replace")
+    except (urllib.error.URLError, OSError) as error:
+        return 0, str(error)
+
+
+def wifi_token(base, code):
+    """A token the device accepts: the cached one, or a new one from `code`."""
+    cached = open(TOKEN_FILE, encoding="utf-8").read().strip() if os.path.exists(TOKEN_FILE) else ""
+    if cached and request("GET", base + "/api/dev/log", cached, timeout=8)[0] == 200:
+        return cached, ""
+    if not code:
+        return "", "enter the six-digit code the device shows under Developer Mode"
+    status, body = request("POST", base + "/api/dev/pair", data=urllib.parse.urlencode({"code": code}).encode(),
+                           kind="application/x-www-form-urlencoded")
+    if status == 429:
+        return "", "pairing is rate-limited for a moment; the code is probably fine, try again shortly"
+    try:
+        token = json.loads(body)["token"]
+    except (ValueError, KeyError, TypeError):
+        return "", "the device did not accept that code" if status else f"no answer from the device: {body}"
+    with open(TOKEN_FILE, "w", encoding="utf-8") as out:
+        out.write(token)
+    os.chmod(TOKEN_FILE, 0o600)
+    return token, ""
+
+
+def flash_wifi(environment_name, address, code):
+    image = os.path.join(REPO, ".pio", "build", environment_name, "firmware.bin")
+    if not os.path.exists(image):
+        return "nothing built to flash"
+    data = open(image, "rb").read()
+    if data[:1] != b"\xe9":
+        return "firmware.bin is not an app image"
+    if not address:
+        JOB.say("Looking for the device on the network.")
+        devices = discover()
+        if len(devices) != 1:
+            return ("no device found: type the address shown under Developer Mode" if not devices
+                    else "several devices found (" + ", ".join(a for a, _ in devices) + "); type one address")
+        address = devices[0][0]
+    base = "http://" + address.strip().removeprefix("http://").rstrip("/")
+    token, problem = wifi_token(base, code.strip())
+    if problem:
+        return problem
+    JOB.say(f"Uploading {len(data):,} bytes to {base}.")
+    status, body = request("PUT", base + "/api/dev/upload", token, data, "application/octet-stream", timeout=600)
+    if status != 200:
+        return f"upload failed ({status}): {body[:200]}"
+    JOB.say("Uploaded. Installing; the device restarts when it is done.")
+    status, body = request("POST", base + "/api/dev/flash", token, b"", timeout=600)
+    if status != 200:
+        return f"flash failed ({status}): {body[:200]}"
+    JOB.say(body.strip()[:400])
+    return f"flashed {address} over Wi-Fi"
+
+
 PAGE = """<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>CrossPlay builder</title>
@@ -170,7 +274,8 @@ button { font: inherit; padding: .5rem .9rem; border: 2px solid var(--ink); back
          cursor: pointer; }
 button.primary { background: var(--ink); color: var(--paper); }
 button:disabled { opacity: .5; cursor: default; }
-select { font: inherit; padding: .4rem; }
+select, input { font: inherit; padding: .4rem; border: 1px solid var(--line); background: var(--paper);
+                color: var(--ink); }
 #status { font-weight: 600; }
 pre { background: #0001; padding: .75rem; height: 16rem; overflow: auto; white-space: pre-wrap; font-size: .8rem; }
 </style></head><body>
@@ -181,7 +286,10 @@ __SECTIONS__
 <div class="bar">
   <button class="primary" id="flashBuild">Build and flash</button>
   <button id="buildOnly">Build only</button>
-  <select id="port" aria-label="Device"><option value="">Find the device</option></select>
+  <select id="method" aria-label="How to flash"><option value="usb">USB</option><option value="wifi">Wi-Fi</option></select>
+  <select id="port" aria-label="USB device"><option value="">Find the device</option></select>
+  <input id="address" placeholder="Device address (blank finds it)" aria-label="Device address" hidden>
+  <input id="code" placeholder="Pairing code" aria-label="Pairing code" inputmode="numeric" size="9" hidden>
   <span id="status"></span>
 </div>
 <pre id="log"></pre>
@@ -203,7 +311,9 @@ async function ports() {
 }
 async function start(withFlash) {
   const reply = await fetch('/api/run', {method: 'POST', headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({keep: kept(), flash: withFlash, port: document.getElementById('port').value})});
+    body: JSON.stringify({keep: kept(), flash: withFlash, method: methodEl.value,
+      port: document.getElementById('port').value, address: document.getElementById('address').value,
+      code: document.getElementById('code').value})});
   const body = await reply.json();
   if (!reply.ok) { statusEl.textContent = body.error; return; }
   poll();
@@ -216,6 +326,13 @@ async function poll() {
   buttons.forEach(b => b.disabled = state.running);
   if (state.running) setTimeout(poll, 1000);
 }
+const methodEl = document.getElementById('method');
+methodEl.onchange = () => {
+  const wifi = methodEl.value === 'wifi';
+  document.getElementById('port').hidden = wifi;
+  document.getElementById('address').hidden = !wifi;
+  document.getElementById('code').hidden = !wifi;
+};
 buttons[0].onclick = () => start(true);
 buttons[1].onclick = () => start(false);
 ports();
@@ -273,25 +390,28 @@ def make_handler(environment_name):
                 self.reply(404, json.dumps({"error": "not found"}))
                 return
             try:
-                request = json.loads(self.rfile.read(int(self.headers.get("Content-Length", "0"))) or b"{}")
+                payload = json.loads(self.rfile.read(int(self.headers.get("Content-Length", "0"))) or b"{}")
             except ValueError:
                 self.reply(400, json.dumps({"error": "bad request"}))
                 return
             items = pick.shelf_items()
             titles = {title for _, title, _ in items}
-            kept = {title for title in request.get("keep", []) if title in titles}
+            kept = {title for title in payload.get("keep", []) if title in titles}
             for folder in ("GAMES", "APPS"):
                 if not any(f == folder and title in kept for f, title, _ in items):
                     self.reply(400, json.dumps({"error": f"Keep at least one of the {folder.lower()}."}))
                     return
-            port = str(request.get("port", ""))
-            with_flash = bool(request.get("flash"))
+            port = str(payload.get("port", ""))
+            with_flash = bool(payload.get("flash"))
+            over_wifi = payload.get("method") == "wifi"
+            address = str(payload.get("address", ""))
+            code = str(payload.get("code", ""))
 
             def work():
                 result = build(kept, environment_name)
                 if result != "built" or not with_flash:
                     return result
-                return flash(environment_name, port)
+                return flash_wifi(environment_name, address, code) if over_wifi else flash(environment_name, port)
 
             if not JOB.start(work):
                 self.reply(409, json.dumps({"error": "Already working."}))
