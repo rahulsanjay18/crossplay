@@ -7,6 +7,7 @@
 #include <cstdio>
 #include <cstring>
 
+#include "../../activities/util/KeyboardEntryActivity.h"
 #include "../Shelf.h"
 #include "../ui/Toybox.h"
 #include "../ui/ToyboxFonts.h"
@@ -48,6 +49,7 @@ void CalculatorActivity::onEnter() {
   Activity::onEnter();
   toybox::ensureFonts(renderer);
   calc::ensureCalcFonts(renderer);
+  graphing.load();
   requestUpdate();
 }
 
@@ -62,7 +64,14 @@ void CalculatorActivity::drawChrome() {
   renderer.getOrientedViewableTRBL(&safeTop, &safeRight, &safeBottom, &safeLeft);
   renderer.fillRect(0, 0, w, calc::kChromeHeight, true);
   calc::drawCapsCentered(renderer, calc::kLabelFontId, calc::kMargin, safeTop, calc::kChromeHeight - safeTop,
-                         "CALCULATOR", false);
+                         graphingMode ? "GRAPHING" : "CALCULATOR", false);
+  if (!graphingMode) {
+    // The way into the graphing mode; its own BASIC key is the way back.
+    const char* mode = "GRAPH >";
+    const int width = renderer.getTextWidth(calc::kSmallFontId, mode);
+    calc::drawCapsCentered(renderer, calc::kSmallFontId, w - calc::kMargin - width, safeTop,
+                           calc::kChromeHeight - safeTop, mode, false);
+  }
   renderer.fillRect(0, calc::kChromeHeight + 4, w, calc::kRule, true);
 }
 
@@ -152,13 +161,31 @@ void CalculatorActivity::render(RenderLock&&) {
   toybox::Frame frame(target, device, noInput, interactions);
 
   drawChrome();
-  const calc::PadGeom g = calc::padGeometry(renderer.getScreenWidth(), renderer.getScreenHeight());
-  drawDisplay(g);
-  drawPad(g);
+  if (graphingMode) {
+    graphing.draw(renderer, calc::bodyRect(renderer.getScreenWidth(), renderer.getScreenHeight()));
+  } else {
+    const calc::PadGeom g = calc::padGeometry(renderer.getScreenWidth(), renderer.getScreenHeight());
+    drawDisplay(g);
+    drawPad(g);
+  }
 
   interactionsReady = true;
   noteSurfaceBuilt();
   renderer.displayBuffer();
+}
+
+void CalculatorActivity::openKeyboard() {
+  // For what the keypad has no key for: variables A to Z, and long edits.
+  auto keyboard =
+      makeUniqueNoThrow<KeyboardEntryActivity>(renderer, mappedInput, "EXPRESSION", graphing.keyboardText(), 200);
+  if (!keyboard) {
+    LOG_ERR("CALC", "OOM: keyboard");
+    return;
+  }
+  startActivityForResult(std::move(keyboard), [this](const ActivityResult& result) {
+    if (!result.isCancelled) graphing.keyboardDone(std::get<KeyboardResult>(result.data).text);
+    requestUpdate();
+  });
 }
 
 void CalculatorActivity::loop() {
@@ -167,13 +194,51 @@ void CalculatorActivity::loop() {
   // the frame path in name only. host-tests/backgesture enforces exactly this,
   // after Trivia shipped with no way out at all.
   if (mappedInput.wasReleased(MappedInputManager::Button::Back)) {
+    if (graphingMode && graphing.back()) {
+      requestUpdate();
+      return;
+    }
     shelf::leave(renderer, mappedInput);
     return;
+  }
+  if (graphingMode) {
+    int direction = 0;
+    if (mappedInput.wasReleased(MappedInputManager::Button::PageForward)) direction = 1;
+    if (mappedInput.wasReleased(MappedInputManager::Button::PageBack)) direction = -1;
+    if (direction != 0 && graphing.step(direction)) {
+      requestUpdate();
+      return;
+    }
   }
 
   int tapX = 0;
   int tapY = 0;
   if (!mappedInput.wasScreenTapped(tapX, tapY) || !interactionsReady) return;
+
+  if (tapY < calc::kChromeHeight) {
+    if (!graphingMode && tapX > renderer.getScreenWidth() / 2) {
+      graphingMode = true;
+      requestUpdate();
+    }
+    return;
+  }
+  if (graphingMode) {
+    switch (graphing.tap(tapX, tapY, calc::bodyRect(renderer.getScreenWidth(), renderer.getScreenHeight()))) {
+      case calc::Graphing::Request::Redraw:
+        requestUpdate();
+        break;
+      case calc::Graphing::Request::OpenKeyboard:
+        openKeyboard();
+        break;
+      case calc::Graphing::Request::Basic:
+        graphingMode = false;
+        requestUpdate();
+        break;
+      case calc::Graphing::Request::None:
+        break;
+    }
+    return;
+  }
 
   const calc::PadGeom g = calc::padGeometry(renderer.getScreenWidth(), renderer.getScreenHeight());
   const int index = calc::keyAt(calc::kPad, g, tapX, tapY);

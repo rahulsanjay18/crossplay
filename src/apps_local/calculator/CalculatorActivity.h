@@ -16,6 +16,7 @@
 #include "../../activities/Activity.h"
 #include "../ui/ToyboxScreen.h"
 #include "CalcEngine.h"
+#include "CalcGraphing.h"
 #include "CalcStyle.h"
 
 class CalculatorActivity final : public Activity {
@@ -36,7 +37,11 @@ class CalculatorActivity final : public Activity {
   void drawPad(const calc::PadGeom& g);
   void drawKey(const calc::KeyDef& key, const calc::Rect16& r);
 
+  void openKeyboard();
+
   calc::Engine engine;
+  calc::Graphing graphing;
+  bool graphingMode = false;
   toybox::Interactions interactions;
   bool interactionsReady = false;
 };
